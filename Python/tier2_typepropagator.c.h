@@ -412,7 +412,7 @@
         }
 
         TARGET(UNPACK_EX) {
-            STACK_GROW((oparg >> 8) + (oparg & 0xFF));
+            STACK_GROW((oparg & 0xFF) + (oparg >> 8));
             for (int i = 0; i < (oparg & 0xFF); i++) {TYPE_OVERWRITE((_Py_TYPENODE_t *)_Py_TYPENODE_NULLROOT, TYPESTACK_PEEK((oparg & 0xFF) - i), true);}
             break;
         }
