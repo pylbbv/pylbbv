@@ -592,7 +592,6 @@ class Instruction:
             for op in otype.ops:
                 match op.src:
                     case TypeSrcLiteral(literal=valstr):
-                        print(self.name)
                         if valstr == null:
                             src = nullnode
                             flag = true_str
