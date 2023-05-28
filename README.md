@@ -4,7 +4,7 @@ A Lazy Basic Block Versioning + Copy and Patch JIT Interpreter for CPython.
 
 Python is a widely-used programming language. CPython is its reference implementation. Due to Python’s dynamic type semantics, CPython is generally unable to execute Python programs as fast as it potentially could with static type semantics.
 
-Last semester, while taking CS4215, we made progress on a technique for removing type checks and other overheads associated with dynamic languages known as [Lazy Basic Block Versioning (LBBV)](https://arxiv.org/abs/1411.0352). This work will be referred to as PyLBBV. More details can be found in our [technical report](https://github.com/pylbbv/pylbbv/blob/pylbbv/report/CPython_Tier_2_LBBV_Report_For_Repo.pdf).
+Last semester, while taking CS4215, we made progress on a technique for removing type checks and other overheads associated with dynamic languages known as [Lazy Basic Block Versioning (LBBV)](https://arxiv.org/abs/1411.0352). This work will be referred to as PyLBBV. More details can be found in our [technical report](https://github.com/pylbbv/pylbbv/blob/pylbbv/report/CPython_Tier_2_LBBV_Report_For_Repo.pdf). For an introduction to PyLBBV, refer to our [presentation](https://docs.google.com/presentation/d/e/2PACX-1vQ9eUaAdAgU0uFbEkyBbptcLZ4dpdRP-Smg1V499eogiwlWa61EMYVZfNEXg0xNaQvlmdNIn_07HItn/pub?start=false&loop=false&delayms=60000). 
 
 This orbital, we intend to refine PyLBBV. These include but are not limited to:
 - General refactoring
