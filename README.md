@@ -4,21 +4,21 @@ A Lazy Basic Block Versioning + Copy and Patch JIT Interpreter for CPython.
 
 Python is a widely-used programming language. CPython is its reference implementation. Due to Python’s dynamic type semantics, CPython is generally unable to execute Python programs as fast as it potentially could with static type semantics.
 
-Last semester, while taking CS4215, we made progress on a technique for removing type checks and other overheads associated with dynamic languages known as [Lazy Basic Block Versioning (LBBV)](https://arxiv.org/abs/1411.0352). This work will be referred to as PyLBBV. More details can be found in our [technical report](https://github.com/pylbbv/pylbbv/blob/pylbbv/report/CPython_Tier_2_LBBV_Report_For_Repo.pdf). For an introduction to PyLBBV, refer to our [presentation](https://docs.google.com/presentation/d/e/2PACX-1vQ9eUaAdAgU0uFbEkyBbptcLZ4dpdRP-Smg1V499eogiwlWa61EMYVZfNEXg0xNaQvlmdNIn_07HItn/pub?start=false&loop=false&delayms=60000). 
+Last semester, while taking CS4215, we made progress on implementing a technique for removing type checks and other overheads associated with dynamic languages known as [Lazy Basic Block Versioning (LBBV)](https://arxiv.org/abs/1411.0352) in CPython. This work will be referred to as pyLBBV. More details can be found in our [technical report](https://github.com/pylbbv/pylbbv/blob/pylbbv/report/CPython_Tier_2_LBBV_Report_For_Repo.pdf). For an introduction to pyLBBV, refer to our [presentation](https://docs.google.com/presentation/d/e/2PACX-1vQ9eUaAdAgU0uFbEkyBbptcLZ4dpdRP-Smg1V499eogiwlWa61EMYVZfNEXg0xNaQvlmdNIn_07HItn/pub?start=false&loop=false&delayms=60000). 
 
-This orbital, we intend to refine PyLBBV. These include but are not limited to:
+This Orbital, we intend to refine pyLBBV. These include but are not limited to:
 - General refactoring
 - Bug fixing
 - Better unboxing + support unboxing of other types
 - More type specialised code
 
-Furthermore, we intend to further PyLBBV by implementing a [Copy and Patch JIT](https://arxiv.org/abs/2011.13127) on top of the type specialisation PyLBBV provides. The culmination of these efforts will allow further optimisations to be implemented. We hope that this effort can allow Python to be as fast as a statically typed language. PyLBBV's type propagator has been [submitted](https://github.com/faster-cpython/ideas/issues/564) for consideration to the Faster CPython team at Microsoft with positive response. Our work here will be made publically available so that it will benefit CPython and its users, and we plan to collaborate closely with the developers of CPython in the course of this project.
+Furthermore, we intend to further pyLBBV by integrating a [Copy and Patch JIT](https://arxiv.org/abs/2011.13127) (using code written externally by Brandt Bucher) on top of the type specialisation PyLBBV provides. The culmination of these efforts will allow further optimisations to be implemented. We hope that this effort can allow Python to be as fast as a statically typed language. Our work here will be made publically available so that it will benefit CPython and its users, and we plan to collaborate closely with the developers of CPython in the course of this project.
 
 Due to Python being a huge language, pyLBBVAndPatch intends to support and optimise a subset of Python. Specifically pyLBBVAndPatch focuses on integer and float arithmetic. We believe this scope is sufficient as an exploration of the LBBV + Copy and Patch JIT approach for CPython.
 
 # Project Plan
 
-- Fix bugs and refactor hot-patches in PyLBBV
+- Fix bugs and refactor hot-patches in pyLBBV
 - Implement interprocedural type propagation
 - Implement typed object versioning
 - Implement unboxing of integers, floats and other primitive types
@@ -28,14 +28,13 @@ Due to Python being a huge language, pyLBBVAndPatch intends to support and optim
 
 Refer to [the issues page](https://github.com/pylbbv/pylbbv/issues).
 
-# Changelog
+# Changelog over CS4215
 
 * Refactor: Typeprop codegen by @JuliaPoo in https://github.com/pylbbv/pylbbv/pull/1
     * Refactored type propagation codegen to more explicitly align with the formalism in our [technical report (Appendix)](https://github.com/pylbbv/pylbbv/blob/pylbbv/report/CPython_Tier_2_LBBV_Report_For_Repo.pdf) and remove duplicated logic
     * Fixed bug with possible reference cycle in the type propagation `TYPE_SET` operation
 * feat: granular type checks by @Fidget-Spinner in https://github.com/pylbbv/pylbbv/pull/2
-    * Split `BINARY_CHECK_X` into simply `CHECK_X`
-        * @KENJIN: Write rationale and issues
+    * Split `BINARY_CHECK_X` into simply `CHECK_X` and short-circuit failure paths. This allows us to follow more closely to the LBBV paper. It also means we can supported cases where one operand is known but the other unknown.
 * Perf: Improved typeprop by switching overwrite -> set by @JuliaPoo in https://github.com/pylbbv/pylbbv/pull/6
     * Stricter type propagation reduces type information loss
 
@@ -55,7 +54,7 @@ language, our interpreter cannot be used as a bootstrap Python.
 During the build process, errors may be printed, and the build process may error. However,
 the final Python executable should still be generated.
 
-# Where are files located?
+# Where are files located? Where is documentation?
 
 The majority of the changes and functionality are in `Python/tier2.c` where Doxygen documentation
 is written alongside the code, and in `Tools/cases_generator/` which contains the DSL implementation.
@@ -65,7 +64,7 @@ is written alongside the code, and in `Tools/cases_generator/` which contains th
 We've written simple tests of the main functionalities.
 Unfortunately we did not have time to write comprehensive tests, and it doesn't seem worth it eitherways given the experimental nature of this project.
 
-After building, run `python tier2_test.py` in the repository's root folder.
+After building, run `python tier2_test.py` or `python.bat tier2_test.py` (on Windows)  in the repository's root folder.
 
 # Debugging output
 
