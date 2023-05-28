@@ -512,37 +512,9 @@ class Instruction:
 
         # Get all input variables we need to declare
         need_to_declare = []
-        # Stack input is used in local effect
-        if self.local_effects and \
-            isinstance(val := self.local_effects.value, TypeSrcStackInput):
-            need_to_declare.append(val.name)
-        # Stack input is used in output effect
-        for oeffect in self.output_effects:
-            if not (typ := oeffect.type_annotation): continue
-            ops = typ.ops
-            for op in ops:
-                if not isinstance(src := op.src, TypeSrcStackInput): continue
-                if oeffect.name in self.unmoved_names and oeffect.name == src.name:
-                    print(
-                        f"Warn: {self.name} type annotation for {oeffect.name} will be ignored "
-                        "as it is unmoved")
-                    continue
-                need_to_declare.append(src.name)
-
-        # Declare input variables
-        for i, ieffect in enumerate(ieffects):
-            if ieffect.name not in need_to_declare: continue
-
-            isize = string_effect_size(list_effect_size(ieffects[: i + 1]))
-            dst = StackEffect(ieffect.name, typenode_ptr)
-            if ieffect.size:
-                # TODO: Support more cases as needed
-                raise Exception("Type propagation across sized input effect not implemented")
-            elif ieffect.cond:
-                src = StackEffect(f"({ieffect.cond}) ? {typestackpeek_format%isize} : {null}", typenode_ptr)
-            else:
-                src = StackEffect(typestackpeek_format%isize, typenode_ptr)
-            out.declare(dst, src)
+        # Save what to output
+        to_emit_before = []
+        to_emit_after = []
 
         # Local effect
         if self.local_effects:
@@ -562,20 +534,18 @@ class Instruction:
                         flag = true_str
                 # Input localeffect
                 case TypeSrcStackInput(name=src):
+                    need_to_declare.append(src)
                     flag = false_str
                 case _:
                     typing.assert_never(val)
-            out.emit(f"{type_overwrite}({src}, {dst}, {flag});")
-
-        # Adjust stack size
-        out.stack_adjust(0, self.input_effects, oeffects)
+            to_emit_before.append(f"{type_overwrite}({src}, {dst}, {flag});")
 
         # Pad ieffects to be the same length as oeffects
-        ieffects = ieffects[-len(oeffects):]
-        ieffects = [None]*(len(oeffects) - len(ieffects)) + ieffects
+        padded_ieffects = ieffects[-len(oeffects):]
+        padded_ieffects = [None]*(len(oeffects) - len(padded_ieffects)) + padded_ieffects
 
         # Stack effect
-        for i, (ieffect, oeffect) in enumerate(zip(ieffects, oeffects)):
+        for i, (ieffect, oeffect) in enumerate(zip(padded_ieffects, oeffects)):
 
             # Unused var
             if oeffect.name == UNUSED: continue
@@ -587,7 +557,8 @@ class Instruction:
             # Unmoved var
             if (otype is None 
                 and (ieffect is not None)
-                and (oeffect.name == ieffect.name)): continue
+                and (oeffect.name == ieffect.name)): 
+                continue
 
             # New sized stackvar: Typeoverwrite NULL
             if otype is None and oeffect.size:
@@ -600,7 +571,7 @@ class Instruction:
                     f"{op}({src}, {dst}, {flag});"
                     f"}}"
                 ])
-                out.emit(opstr)
+                to_emit_after.append(opstr)
                 continue
 
             assert not oeffect.size, f"Typed sized stackvar not supported!"
@@ -612,15 +583,16 @@ class Instruction:
                 flag = true_str
                 opstr = f"{typ_op}({src}, {dst}, {flag})"
                 if oeffect.cond:
-                    out.emit(f"if ({oeffect.cond}) {{ {opstr}; }}")
+                    to_emit_after.append(f"if ({oeffect.cond}) {{ {opstr}; }}")
                 else:
-                    out.emit(f"{opstr};")
+                    to_emit_after.append(f"{opstr};")
                 continue
 
             # Literal/Input/Locals/Consts Typeoverwrite/Typeset
             for op in otype.ops:
                 match op.src:
                     case TypeSrcLiteral(literal=valstr):
+                        print(self.name)
                         if valstr == null:
                             src = nullnode
                             flag = true_str
@@ -628,6 +600,7 @@ class Instruction:
                             src = literal_root_format%valstr
                             flag = true_str
                     case TypeSrcStackInput(name=src):
+                        need_to_declare.append(src)
                         flag = false_str
                     case TypeSrcConst(index=idx):
                         src = typeconstsget_format%idx
@@ -640,9 +613,35 @@ class Instruction:
 
                 opstr = f"{op.op}({src}, {dst}, {flag})"
                 if oeffect.cond:
-                    out.emit(f"if ({oeffect.cond}) {{ {opstr}; }}")
+                    to_emit_after.append(f"if ({oeffect.cond}) {{ {opstr}; }}")
                 else:
-                    out.emit(f"{opstr};")
+                    to_emit_after.append(f"{opstr};")
+
+        # Declare input variables
+        for i, ieffect in enumerate(ieffects):
+            if ieffect.name not in need_to_declare: continue
+
+            isize = string_effect_size(list_effect_size(ieffects[: i + 1]))
+            dst = StackEffect(ieffect.name, typenode_ptr)
+            if ieffect.size:
+                # TODO: Support more cases as needed
+                raise Exception("Type propagation across sized input effect not implemented")
+            elif ieffect.cond:
+                src = StackEffect(f"({ieffect.cond}) ? {typestackpeek_format%isize} : {null}", typenode_ptr)
+            else:
+                src = StackEffect(typestackpeek_format%isize, typenode_ptr)
+            out.declare(dst, src)
+
+        # Emit localeffect
+        for x in to_emit_before: out.emit(x)
+
+        # Adjust stack size
+        out.stack_adjust(0, self.input_effects, self.output_effects)
+
+        # Emit stack output effect
+        for x in to_emit_after: out.emit(x)
+
+            
 
 
 InstructionOrCacheEffect = Instruction | parser.CacheEffect
