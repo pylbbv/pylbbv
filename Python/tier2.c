@@ -2695,17 +2695,8 @@ typenode_is_compatible(
         ? &ctx1->type_locals[node_idx2]
         : &ctx1->type_stack[node_idx2];
 
-    if (!( typenode_is_same_tree(mappedroot1, root2)
-        && typenode_is_same_tree(mappedroot2, root1))) {
-        return false;
-    }
-
-    // Get the resolved type of each node
-    PyTypeObject *type1 = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(*root1);
-    PyTypeObject *type2 = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(*root2);
-
-    // Exact compatible (same root)
-    return type1 == type2;
+    return typenode_is_same_tree(mappedroot1, root2)
+        && typenode_is_same_tree(mappedroot2, root1);
 }
 
 /**
