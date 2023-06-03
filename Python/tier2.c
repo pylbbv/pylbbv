@@ -1795,6 +1795,20 @@ _PyTier2_Code_DetectAndEmitBB(
                 type_propagate(UNBOX_FLOAT, 0, starting_type_context, consts);
                 continue;
             }
+            else if (typ == &PyLong_Type) {
+                // We break our own rules for more efficient code here.
+                // NOTE: THIS MODIFIES THE TYPE CONTEXT.
+                if (_PyLong_IsNonNegativeCompact((PyLongObject *)GET_CONST(oparg))) {
+                    write_i = emit_i(write_i, LOAD_CONST, curr->op.arg);
+
+                    // Type propagate
+                    _PyTier2TypeContext *type_context = starting_type_context;
+                    _Py_TYPENODE_t **type_stackptr = &type_context->type_stack_ptr;
+                    *type_stackptr += 1;
+                    TYPE_OVERWRITE((_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT((_Py_TYPENODE_t)&PySmallInt_Type), TYPESTACK_PEEK(1), true);
+                    continue;
+                }
+            }
             DISPATCH();
         }
         case LOAD_FAST: {
