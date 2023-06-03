@@ -2650,6 +2650,78 @@ _PyTier2_GenerateNextBB(
 }
 
 /**
+ * @brief Helper funnction of typecontext_is_compatible. See that for why we need this.
+ * @param ctx1_node A type node belong to a type context.
+ * @param ctx2_node A type node beloning to a different type context.
+ * @return If the type nodes' parent trees are compatible.
+*/
+static bool
+typenode_is_compatible(_Py_TYPENODE_t ctx1_node, _Py_TYPENODE_t ctx2_node)
+{
+    _Py_TYPENODE_t *ref_ptr1, *ref_ptr2;
+    _Py_TYPENODE_t ref1 = ctx1_node;
+    _Py_TYPENODE_t ref2 = ctx2_node;
+    uintptr_t tag1 = _Py_TYPENODE_GET_TAG(ref1);
+    uintptr_t tag2 = _Py_TYPENODE_GET_TAG(ref2);
+
+    while (tag1 != TYPE_ROOT && tag2 != TYPE_ROOT) {
+        ref_ptr1 = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(ref1));
+        ref1 = *ref_ptr1;
+        tag1 = _Py_TYPENODE_GET_TAG(ref1);
+
+        ref_ptr2 = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(ref2));
+        ref2 = *ref_ptr2;
+        tag2 = _Py_TYPENODE_GET_TAG(ref2);
+    }
+
+    // Exact compatible (same root)
+    return (tag1 == TYPE_ROOT && tag2 == TYPE_ROOT) &&
+        ((PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(ref1) ==
+        (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(ref2));
+}
+
+/**
+ * @brief Checks that type context 2 is compatible with context 1.
+ * ctx2 is compatible with ctx1 if any execution state with ctx2 can run on code emitted from ctx1
+ *
+ * @param ctx1 The base type context.
+ * @param ctx2 The type context to compare with.
+ * @return true if compatible, false otherwise.
+*/
+static bool
+typecontext_is_compatible(_PyTier2TypeContext *ctx1, _PyTier2TypeContext *ctx2)
+{
+    // This function does two things:
+    // 1. Check that the trees are the same "shape" and equivalent. This allows
+    //    ctx1's trees to be a subtree of ctx2.
+    // 2. Check that the trees resolve to the same root type.
+
+    assert(ctx1->type_locals_len == ctx2->type_locals_len);
+    assert(ctx1->type_stack_len == ctx2->type_stack_len);
+    int stack_elems1 = (int)(ctx1->type_stack_ptr - ctx1->type_stack);
+    int stack_elems2 = (int)(ctx2->type_stack_ptr - ctx2->type_stack);
+    assert(stack_elems1 == stack_elems2);
+
+    // Check the locals
+    for (int i = 0; i < ctx1->type_locals_len; i++) {
+        if (!typenode_is_compatible(ctx1->type_locals[i],
+            ctx2->type_locals[i])) {
+            return false;
+        }
+    }
+
+    // Check the type stack
+    for (int i = 0; i < stack_elems1; i++) {
+        if (!typenode_is_compatible(ctx1->type_stack[i],
+            ctx2->type_stack[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * @brief Calculates the difference between two type contexts.
  * @param ctx1 The base type context.
  * @param ctx2 The type context to compare with.
@@ -2672,6 +2744,10 @@ diff_typecontext(_PyTier2TypeContext *ctx1, _PyTier2TypeContext *ctx2)
     int stack_elems1 = (int)(ctx1->type_stack_ptr - ctx1->type_stack);
     int stack_elems2 = (int)(ctx2->type_stack_ptr - ctx2->type_stack);
     assert(stack_elems1 == stack_elems2);
+
+    if (!typecontext_is_compatible(ctx1, ctx2)) {
+        return INT_MAX;
+    }
 
     int diff = 0;
     // Check the difference in the type locals
