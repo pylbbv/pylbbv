@@ -248,6 +248,28 @@ typenode_get_type(_Py_TYPENODE_t node)
     }
 }
 
+static bool typenode_is_same_tree(_Py_TYPENODE_t *src, _Py_TYPENODE_t *dst)
+{
+    _Py_TYPENODE_t *srcrootref = src;
+    _Py_TYPENODE_t *dstrootref = dst;
+    uintptr_t dsttag = _Py_TYPENODE_GET_TAG(*dst);
+    uintptr_t srctag = _Py_TYPENODE_GET_TAG(*src);
+    switch (dsttag) {
+    case TYPE_REF: dstrootref = __typenode_get_rootptr(*dst);
+    case TYPE_ROOT:
+        switch (srctag) {
+        case TYPE_REF: srcrootref = __typenode_get_rootptr(*src);
+        case TYPE_ROOT:
+            return srcrootref == dstrootref;
+        default:
+            Py_UNREACHABLE();
+        }
+        break;
+    default:
+        Py_UNREACHABLE();
+    }
+}
+
 /**
  * @brief Performs TYPE_SET operation. dst tree becomes part of src tree
  * 
@@ -279,55 +301,23 @@ __type_propagate_TYPE_SET(
     }
 #endif
 
-    if (!src_is_new) {
-        // Check if they are the same tree
-        _Py_TYPENODE_t *srcrootref = src;
-        _Py_TYPENODE_t *dstrootref = dst;
-        uintptr_t dsttag = _Py_TYPENODE_GET_TAG(*dst);
-        uintptr_t srctag = _Py_TYPENODE_GET_TAG(*src);
-        switch (dsttag) {
-        case TYPE_REF: dstrootref = __typenode_get_rootptr(*dst);
-        case TYPE_ROOT:
-            switch (srctag) {
-            case TYPE_REF: srcrootref = __typenode_get_rootptr(*src);
-            case TYPE_ROOT:
-                if (srcrootref == dstrootref) {
-                    // Same tree, no point swapping
-                    return;
-                }
-                break;
-            default:
-                Py_UNREACHABLE();
-            }
-            break;
-        default:
-            Py_UNREACHABLE();
-        }
+    if (!src_is_new && typenode_is_same_tree(src, dst)) {
+        return;
     }
 
     uintptr_t tag = _Py_TYPENODE_GET_TAG(*dst);
+    _Py_TYPENODE_t *rootref = dst;
     switch (tag) {
-    case TYPE_ROOT: {
+    case TYPE_REF: rootref = __typenode_get_rootptr(*dst);
+    case TYPE_ROOT:
         if (!src_is_new) {
             // Make dst a reference to src
-            *dst = _Py_TYPENODE_MAKE_REF((_Py_TYPENODE_t)src);
-            break;
-        }
-        // Make dst the src
-        *dst = (_Py_TYPENODE_t)src;
-        break;
-    }
-    case TYPE_REF: {
-        _Py_TYPENODE_t *rootref = __typenode_get_rootptr(*dst);
-        if (!src_is_new) {
-            // Traverse up to the root of dst, make root a reference to src
             *rootref = _Py_TYPENODE_MAKE_REF((_Py_TYPENODE_t)src);
             break;
         }
-        // Make root of dst the src
+        // Make dst the src
         *rootref = (_Py_TYPENODE_t)src;
         break;
-    }
     default:
         Py_UNREACHABLE();
     }
@@ -364,6 +354,10 @@ __type_propagate_TYPE_OVERWRITE(
         assert(_Py_TYPENODE_GET_TAG((_Py_TYPENODE_t)src) == TYPE_ROOT);
     }
 #endif
+
+    if (!src_is_new && typenode_is_same_tree(src, dst)) {
+        return;
+    }
 
     uintptr_t tag = _Py_TYPENODE_GET_TAG(*dst);
     switch (tag) {
@@ -487,28 +481,8 @@ __type_propagate_TYPE_SWAP(
     _PyTier2TypeContext *type_context,
     _Py_TYPENODE_t *src, _Py_TYPENODE_t *dst)
 {
-    // Check if they are the same tree
-    _Py_TYPENODE_t *srcrootref = src;
-    _Py_TYPENODE_t *dstrootref = dst;
-    uintptr_t dsttag = _Py_TYPENODE_GET_TAG(*dst);
-    uintptr_t srctag = _Py_TYPENODE_GET_TAG(*src);
-    switch (dsttag) {
-    case TYPE_REF: dstrootref = __typenode_get_rootptr(*dst);
-    case TYPE_ROOT:
-        switch (srctag) {
-        case TYPE_REF: srcrootref = __typenode_get_rootptr(*src);
-        case TYPE_ROOT:
-            if (srcrootref == dstrootref) {
-                // Same tree, no point swapping
-                return;
-            }
-            break;
-        default:
-            Py_UNREACHABLE();
-        }
-        break;
-    default:
-        Py_UNREACHABLE();
+    if (typenode_is_same_tree(src, dst)) {
+        return;
     }
 
     // src and dst are different tree,
