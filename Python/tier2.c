@@ -2766,9 +2766,11 @@ diff_typecontext(_PyTier2TypeContext *ctx1, _PyTier2TypeContext *ctx2)
     assert(ctx2 != NULL);
 #if BB_DEBUG
     fprintf(stderr, "  [*] Diffing type contexts\n");
+#if TYPEPROP_DEBUG
     static void print_typestack(const _PyTier2TypeContext * type_context);
     print_typestack(ctx1);
     print_typestack(ctx2);
+#endif
 #endif
     assert(ctx1->type_locals_len == ctx2->type_locals_len);
     assert(ctx1->type_stack_len == ctx2->type_stack_len);
@@ -2920,9 +2922,17 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
     assert(jump_offset_id >= 0);
     assert(candidate_bb_id >= 0);
     assert(candidate_bb_tier1_start != NULL);
+#if BB_DEBUG
+    if (matching_bb_id != -1) {
+        fprintf(stderr, "Found jump target BB ID: %d\n", matching_bb_id);
+    }
+#endif
     // We couldn't find a matching BB to jump to. Time to generate our own.
     // This also requires rewriting our backwards jump to a forward jump later.
     if (matching_bb_id == -1) {
+#if BB_DEBUG
+        fprintf(stderr, "Generating new jump target BB ID: %d\n", matching_bb_id);
+#endif
         // We should use the type context occuring at the end of the loop.
         _PyTier2TypeContext *copied = _PyTier2TypeContext_Copy(curr_type_context);
         if (copied == NULL) {
@@ -2965,7 +2975,7 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
     assert(matching_bb_id >= 0);
     assert(matching_bb_id <= t2_info->bb_data_curr);
 #if BB_DEBUG
-    fprintf(stderr, "Found jump target BB ID: %d\n", matching_bb_id);
+    fprintf(stderr, "Using jump target BB ID: %d\n", matching_bb_id);
 #endif
     _PyTier2BBMetadata *target_metadata = t2_info->bb_data[matching_bb_id];
     return target_metadata->tier2_start;
