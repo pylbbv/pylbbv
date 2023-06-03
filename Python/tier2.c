@@ -249,6 +249,61 @@ typenode_get_type(_Py_TYPENODE_t node)
 }
 
 /**
+ * @brief Gets the location of the node in the type context
+ * @param ctx Pointer to type context to look in
+ * @param node A node in type context `ctx`
+ * @param is_localvar Pointer to boolean.
+     If `node` is inside `ctx->type_locals`, this will return true
+ * @return The index into the array the node is in.
+ *   If `*is_localvar` is true, the array is `ctx->type_locals`.
+ *   Otherwise it is `ctx->type_stack`
+*/
+static int
+typenode_get_location(_PyTier2TypeContext *ctx, _Py_TYPENODE_t *node, bool *is_localvar)
+{
+    // Search locals
+    int nlocals = ctx->type_locals_len;
+    int offset = (int)(node - ctx->type_locals);
+    if (offset >= 0 && offset < nlocals) {
+        *is_localvar = true;
+        return offset;
+    }
+
+    // Search stack
+    int nstack = ctx->type_stack_len;
+    offset = (int)(node - ctx->type_stack);
+    for (int i = 0; i < nstack; i++) {
+        *is_localvar = false;
+        return offset;
+    }
+
+    Py_UNREACHABLE();
+}
+
+/**
+ * @brief Check if two nodes in a type context are in the same tree
+ * @param src 
+*/
+static bool typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
+{
+    _Py_TYPENODE_t *x_rootref = x;
+    _Py_TYPENODE_t *y_rootref = y;
+    uintptr_t x_tag = _Py_TYPENODE_GET_TAG(*x);
+    uintptr_t y_tag = _Py_TYPENODE_GET_TAG(*y);
+    switch (y_tag) {
+    case TYPE_REF: y_rootref = __typenode_get_rootptr(*y);
+    case TYPE_ROOT: break;
+    default: Py_UNREACHABLE();
+    }
+    switch (x_tag) {
+    case TYPE_REF: x_rootref = __typenode_get_rootptr(*x);
+    case TYPE_ROOT: break;
+    default: Py_UNREACHABLE();
+    }
+    return x_rootref == y_rootref;
+}
+
+/**
  * @brief Performs TYPE_SET operation. dst tree becomes part of src tree
  * 
  * If src_is_new is set, src is interpreted as a TYPE_ROOT 
@@ -2651,33 +2706,54 @@ _PyTier2_GenerateNextBB(
 
 /**
  * @brief Helper funnction of typecontext_is_compatible. See that for why we need this.
- * @param ctx1_node A type node belong to a type context.
- * @param ctx2_node A type node beloning to a different type context.
+ * @param ctx1 A pointer to a type context.
+ * @param ctx2 A pointer to a different type context.
+ * @param ctx1_node A pointer to type node belonging to ctx1.
+ * @param ctx2_node A pointer to type node belonging to ctx2t.
  * @return If the type nodes' parent trees are compatible.
 */
 static bool
-typenode_is_compatible(_Py_TYPENODE_t ctx1_node, _Py_TYPENODE_t ctx2_node)
+typenode_is_compatible(
+    _PyTier2TypeContext *ctx1, _PyTier2TypeContext *ctx2,
+    _Py_TYPENODE_t *ctx1_node, _Py_TYPENODE_t *ctx2_node)
 {
-    _Py_TYPENODE_t *ref_ptr1, *ref_ptr2;
-    _Py_TYPENODE_t ref1 = ctx1_node;
-    _Py_TYPENODE_t ref2 = ctx2_node;
-    uintptr_t tag1 = _Py_TYPENODE_GET_TAG(ref1);
-    uintptr_t tag2 = _Py_TYPENODE_GET_TAG(ref2);
-
-    while (tag1 != TYPE_ROOT && tag2 != TYPE_ROOT) {
-        ref_ptr1 = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(ref1));
-        ref1 = *ref_ptr1;
-        tag1 = _Py_TYPENODE_GET_TAG(ref1);
-
-        ref_ptr2 = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(ref2));
-        ref2 = *ref_ptr2;
-        tag2 = _Py_TYPENODE_GET_TAG(ref2);
+    _Py_TYPENODE_t *root1 = ctx1_node;
+    _Py_TYPENODE_t *root2 = ctx2_node;
+    switch (_Py_TYPENODE_GET_TAG(*ctx1_node)) {
+    case TYPE_REF: root1 = __typenode_get_rootptr(*ctx1_node);
+    case TYPE_ROOT: break;
+    default: Py_UNREACHABLE();
+    }
+    switch (_Py_TYPENODE_GET_TAG(*ctx2_node)) {
+    case TYPE_REF: root2 = __typenode_get_rootptr(*ctx2_node);
+    case TYPE_ROOT: break;
+    default: Py_UNREACHABLE();
     }
 
+    // Get location of each root
+    bool is_local1, is_local2;
+    int node_idx1 = typenode_get_location(ctx1, root1, &is_local1);
+    int node_idx2 = typenode_get_location(ctx2, root2, &is_local2);
+
+    // Map each root to the corresponding location in the other tree
+    _Py_TYPENODE_t* mappedroot1 = is_local1
+        ? &ctx2->type_locals[node_idx1]
+        : &ctx2->type_stack[node_idx1];
+    _Py_TYPENODE_t* mappedroot2 = is_local2
+        ? &ctx1->type_locals[node_idx2]
+        : &ctx1->type_stack[node_idx2];
+
+    if (!( typenode_is_same_tree(mappedroot1, root2)
+        && typenode_is_same_tree(mappedroot2, root1))) {
+        return false;
+    }
+
+    // Get the resolved type of each node
+    PyTypeObject *type1 = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(*root1);
+    PyTypeObject *type2 = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(*root2);
+
     // Exact compatible (same root)
-    return (tag1 == TYPE_ROOT && tag2 == TYPE_ROOT) &&
-        ((PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(ref1) ==
-        (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(ref2));
+    return type1 == type2;
 }
 
 /**
@@ -2696,24 +2772,27 @@ typecontext_is_compatible(_PyTier2TypeContext *ctx1, _PyTier2TypeContext *ctx2)
     //    ctx1's trees to be a subtree of ctx2.
     // 2. Check that the trees resolve to the same root type.
 
+#ifdef Py_DEBUG
+    // These should be true during runtime
     assert(ctx1->type_locals_len == ctx2->type_locals_len);
     assert(ctx1->type_stack_len == ctx2->type_stack_len);
     int stack_elems1 = (int)(ctx1->type_stack_ptr - ctx1->type_stack);
     int stack_elems2 = (int)(ctx2->type_stack_ptr - ctx2->type_stack);
     assert(stack_elems1 == stack_elems2);
+#endif
 
     // Check the locals
     for (int i = 0; i < ctx1->type_locals_len; i++) {
-        if (!typenode_is_compatible(ctx1->type_locals[i],
-            ctx2->type_locals[i])) {
+        if (!typenode_is_compatible(ctx1, ctx2, &ctx1->type_locals[i],
+            &ctx2->type_locals[i])) {
             return false;
         }
     }
 
     // Check the type stack
     for (int i = 0; i < stack_elems1; i++) {
-        if (!typenode_is_compatible(ctx1->type_stack[i],
-            ctx2->type_stack[i])) {
+        if (!typenode_is_compatible(ctx1, ctx2, &ctx1->type_stack[i],
+            &ctx2->type_stack[i])) {
             return false;
         }
     }
