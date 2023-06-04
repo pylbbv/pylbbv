@@ -3357,7 +3357,7 @@ dummy_func(
                 _Py_CODEUNIT *tier1_fallback = NULL;
                 t2_nextinstr = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
-                //  v We generate from the tier1 successor BB, so offset is 0.
+                //  v   We generate from the tier1 consequent BB, so offset (oparg) is 0.
                     0, &tier1_fallback, bb_test);
                 if (t2_nextinstr == NULL) {
                     // Fall back to tier 1.
