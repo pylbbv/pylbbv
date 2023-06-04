@@ -481,6 +481,7 @@ with TestInfo("tier 2 unconditional forward jumps"):
             _
         x+x # Force it to be optimisable
     trigger_tier2(f, (1, []))
+    f(1, [1])
 
     # As long as it doesn't crash, everything's good.
 print("Tests completed ^-^")
