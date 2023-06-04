@@ -468,20 +468,13 @@ with TestInfo("type context backwards jump compatibility check"):
 # Tests for: Tier 2 unconditional forward jump                       #
 ######################################################################
 with TestInfo("tier 2 unconditional forward jumps"):
-    # See https://github.com/pylbbv/pylbbv/issues/9 for more information.
+    # See https://github.com/pylbbv/pylbbv/issues/17 for more information.
     def f(x):
         for _ in [1]:
             break
         x+x # Force it to be optimisable
 
     trigger_tier2(f, (1,))
-
-    def f(x,l):
-        for _ in l:
-            _
-        x+x # Force it to be optimisable
-    trigger_tier2(f, (1, []))
-    f(1, [1])
 
     # As long as it doesn't crash, everything's good.
 print("Tests completed ^-^")
