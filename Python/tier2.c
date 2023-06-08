@@ -282,7 +282,9 @@ typenode_get_location(_PyTier2TypeContext *ctx, _Py_TYPENODE_t *node, bool *is_l
 
 /**
  * @brief Check if two nodes in a type context are in the same tree
- * @param src 
+ * @param x Node from type context
+ * @param y Node from the same type context as `x`
+ * @return If `x` and `y` belong to the same tree in the type context
 */
 static bool typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
 {
