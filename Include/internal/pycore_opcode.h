@@ -55,6 +55,8 @@ const uint8_t _PyOpcode_Caches[256] = {
 };
 
 const uint8_t _PyOpcode_Deopt[256] = {
+    [BB_BRANCH_IF_FLAG_SET] = BB_BRANCH,
+    [BB_BRANCH_IF_FLAG_UNSET] = BB_BRANCH,
     [BB_TEST_ITER_LIST] = BB_TEST_ITER,
     [BB_TEST_ITER_RANGE] = BB_TEST_ITER,
     [BB_TEST_ITER_TUPLE] = BB_TEST_ITER,
@@ -404,11 +406,13 @@ static const char *const _PyOpcode_OpName[263] = {
     [UNPACK_SEQUENCE_TUPLE] = "UNPACK_SEQUENCE_TUPLE",
     [UNPACK_SEQUENCE_TWO_TUPLE] = "UNPACK_SEQUENCE_TWO_TUPLE",
     [SEND_GEN] = "SEND_GEN",
-    [BB_BRANCH] = "BB_BRANCH",
+    [BB_BRANCH_IF_FLAG_SET] = "BB_BRANCH_IF_FLAG_SET",
     [CALL] = "CALL",
     [KW_NAMES] = "KW_NAMES",
     [CALL_INTRINSIC_1] = "CALL_INTRINSIC_1",
     [CALL_INTRINSIC_2] = "CALL_INTRINSIC_2",
+    [BB_BRANCH_IF_FLAG_UNSET] = "BB_BRANCH_IF_FLAG_UNSET",
+    [BB_BRANCH] = "BB_BRANCH",
     [BB_BRANCH_IF_FLAG_UNSET] = "BB_BRANCH_IF_FLAG_UNSET",
     [BB_BRANCH_IF_FLAG_SET] = "BB_BRANCH_IF_FLAG_SET",
     [BB_JUMP_IF_FLAG_UNSET] = "BB_JUMP_IF_FLAG_UNSET",
@@ -439,8 +443,6 @@ static const char *const _PyOpcode_OpName[263] = {
     [STORE_FAST_BOXED_UNBOXED] = "STORE_FAST_BOXED_UNBOXED",
     [STORE_FAST_UNBOXED_BOXED] = "STORE_FAST_UNBOXED_BOXED",
     [STORE_FAST_UNBOXED_UNBOXED] = "STORE_FAST_UNBOXED_UNBOXED",
-    [205] = "<205>",
-    [206] = "<206>",
     [207] = "<207>",
     [208] = "<208>",
     [209] = "<209>",
@@ -502,8 +504,6 @@ static const char *const _PyOpcode_OpName[263] = {
 
 
 #define EXTRA_CASES \
-    case 205: \
-    case 206: \
     case 207: \
     case 208: \
     case 209: \

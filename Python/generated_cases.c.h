@@ -4292,9 +4292,9 @@
                     DISPATCH();
                 }
             }
-            // Their addresses should be the same. Because
-            // The first BB should be generated right after the previous one.
-            assert(next_instr + INLINE_CACHE_ENTRIES_BB_BRANCH == t2_nextinstr);
+            Py_ssize_t forward_jump = t2_nextinstr - next_instr;
+            assert((uint16_t)forward_jump == forward_jump);
+            cache->successor_jumpby = (uint16_t)forward_jump;
             next_instr = t2_nextinstr;
             DISPATCH();
         }
@@ -4319,7 +4319,8 @@
                 _PyTier2_RewriteForwardJump(curr, next_instr);
                 DISPATCH();
             }
-            next_instr += 1;
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
             DISPATCH();
         }
 
@@ -4328,8 +4329,8 @@
                 JUMPBY(oparg);
                 DISPATCH();
             }
-            // Fall through to next instruction.
-            next_instr += 1;
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
             DISPATCH();
         }
 
@@ -4353,7 +4354,8 @@
                 _PyTier2_RewriteForwardJump(curr, next_instr);
                 DISPATCH();
             }
-            next_instr += 1;
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
             DISPATCH();
         }
 
@@ -4362,8 +4364,8 @@
                 JUMPBY(oparg);
                 DISPATCH();
             }
-            // Fall through to next instruction.
-            next_instr += 1;
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
             DISPATCH();
         }
 
