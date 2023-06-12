@@ -67,10 +67,10 @@ initialize_type_context(const PyCodeObject *co)
 
     // Initialize to unknown type.
     for (int i = 0; i < nlocals; i++) {
-        type_locals[i] = _Py_TYPENODE_NULLROOT;
+        type_locals[i] = _Py_TYPENODE_POSITIVE_NULLROOT;
     }
     for (int i = 0; i < nstack; i++) {
-        type_stack[i] = _Py_TYPENODE_NULLROOT;
+        type_stack[i] = _Py_TYPENODE_POSITIVE_NULLROOT;
     }
 
     _PyTier2TypeContext *type_context = PyMem_Malloc(sizeof(_PyTier2TypeContext));
@@ -128,7 +128,8 @@ _PyTier2TypeContext_Copy(const _PyTier2TypeContext *type_context)
         _Py_TYPENODE_t node = type_context->type_locals[i];
         switch _Py_TYPENODE_GET_TAG(node)
         {
-        case TYPE_ROOT:
+        case TYPE_ROOT_POSITIVE:
+        case TYPE_ROOT_NEGATIVE:
             type_locals[i] = node;
             break;
         case TYPE_REF: {
@@ -159,7 +160,8 @@ _PyTier2TypeContext_Copy(const _PyTier2TypeContext *type_context)
         _Py_TYPENODE_t node = type_context->type_stack[i];
         switch _Py_TYPENODE_GET_TAG(node)
         {
-        case TYPE_ROOT:
+        case TYPE_ROOT_POSITIVE:
+        case TYPE_ROOT_NEGATIVE:
             type_stack[i] = node;
             break;
         case TYPE_REF: {
@@ -214,13 +216,11 @@ _PyTier2TypeContext_Free(_PyTier2TypeContext *type_context)
 static _Py_TYPENODE_t*
 __typenode_get_rootptr(_Py_TYPENODE_t ref)
 {
-    uintptr_t tag;
     _Py_TYPENODE_t *ref_ptr;
     do {
         ref_ptr = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(ref));
         ref = *ref_ptr;
-        tag = _Py_TYPENODE_GET_TAG(ref);
-    } while (tag != TYPE_ROOT);
+    } while (!_Py_TYPENODE_IS_ROOT(ref));
     return ref_ptr;
 }
 
@@ -234,7 +234,8 @@ typenode_get_type(_Py_TYPENODE_t node)
 {
     uintptr_t tag = _Py_TYPENODE_GET_TAG(node);
     switch (tag) {
-    case TYPE_ROOT: {
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: {
         PyTypeObject *ret = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(node);
         return ret;
     }
@@ -294,12 +295,14 @@ static bool typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
     uintptr_t y_tag = _Py_TYPENODE_GET_TAG(*y);
     switch (y_tag) {
     case TYPE_REF: y_rootref = __typenode_get_rootptr(*y);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
     switch (x_tag) {
     case TYPE_REF: x_rootref = __typenode_get_rootptr(*x);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
     return x_rootref == y_rootref;
@@ -332,7 +335,7 @@ __type_propagate_TYPE_SET(
     //   - `src` has to be a TYPE_ROOT
     //   - `src` is to be interpreted as a _Py_TYPENODE_t
     if (src_is_new) {
-        assert(_Py_TYPENODE_GET_TAG((_Py_TYPENODE_t)src) == TYPE_ROOT);
+        assert(_Py_TYPENODE_IS_ROOT((_Py_TYPENODE_t)src));
     }
 #endif
 
@@ -344,7 +347,8 @@ __type_propagate_TYPE_SET(
     _Py_TYPENODE_t *rootref = dst;
     switch (tag) {
     case TYPE_REF: rootref = __typenode_get_rootptr(*dst);
-    case TYPE_ROOT:
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE:
         if (!src_is_new) {
             // Make dst a reference to src
             *rootref = _Py_TYPENODE_MAKE_REF((_Py_TYPENODE_t)src);
@@ -386,7 +390,7 @@ __type_propagate_TYPE_OVERWRITE(
 #ifdef Py_DEBUG
     // See: __type_propagate_TYPE_SET
     if (src_is_new) {
-        assert(_Py_TYPENODE_GET_TAG((_Py_TYPENODE_t)src) == TYPE_ROOT);
+        assert(_Py_TYPENODE_IS_ROOT((_Py_TYPENODE_t)src));
     }
 #endif
 
@@ -396,7 +400,8 @@ __type_propagate_TYPE_OVERWRITE(
 
     uintptr_t tag = _Py_TYPENODE_GET_TAG(*dst);
     switch (tag) {
-    case TYPE_ROOT: {
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: {
         
         _Py_TYPENODE_t old_dst = *dst;
         if (!src_is_new) {
@@ -681,7 +686,7 @@ type_propagate(
 #define TYPELOCALS_GET(idx)         (&(type_locals[idx]))
 
 // Get the type of the const and make into a TYPENODE ROOT
-#define TYPECONST_GET(idx)          _Py_TYPENODE_MAKE_ROOT( \
+#define TYPECONST_GET(idx)          _Py_TYPENODE_MAKE_ROOT_POSITIVE( \
                                         (_Py_TYPENODE_t)Py_TYPE( \
                                             PyTuple_GET_ITEM(consts, idx)))
 
@@ -1808,7 +1813,7 @@ _PyTier2_Code_DetectAndEmitBB(
                     _PyTier2TypeContext *type_context = starting_type_context;
                     _Py_TYPENODE_t **type_stackptr = &type_context->type_stack_ptr;
                     *type_stackptr += 1;
-                    TYPE_OVERWRITE((_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT((_Py_TYPENODE_t)&PySmallInt_Type), TYPESTACK_PEEK(1), true);
+                    TYPE_OVERWRITE((_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT_POSITIVE((_Py_TYPENODE_t)&PySmallInt_Type), TYPESTACK_PEEK(1), true);
                     continue;
                 }
             }
@@ -2681,12 +2686,14 @@ typenode_is_compatible(
     _Py_TYPENODE_t *root2 = ctx2_node;
     switch (_Py_TYPENODE_GET_TAG(*ctx1_node)) {
     case TYPE_REF: root1 = __typenode_get_rootptr(*ctx1_node);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
     switch (_Py_TYPENODE_GET_TAG(*ctx2_node)) {
     case TYPE_REF: root2 = __typenode_get_rootptr(*ctx2_node);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
 

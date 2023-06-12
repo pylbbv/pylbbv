@@ -63,20 +63,31 @@ typedef struct {
 typedef enum _Py_TypeNodeTags {
     // Node is unused
     TYPE_NULL = 0,
-    // TYPE_ROOT can point to a PyTypeObject or be a NULL
-    TYPE_ROOT = 1,
+    // TYPE_ROOT_POSITIVE can point to a PyTypeObject or be a NULL
+    TYPE_ROOT_POSITIVE = 1,
     // TYPE_REF points to a TYPE_ROOT or a TYPE_REF
-    TYPE_REF  = 2
+    TYPE_REF  = 2,
+    // TYPE_ROOT_NEGATIVE is a bitmask of negative types
+    TYPE_ROOT_NEGATIVE = 3
 } _Py_TypeNodeTags;
+
+// @TODO define bitmask
+#define _Py_NEGATIVE_BITMASK_LEN 4
 
 #define _Py_TYPENODE_GET_TAG(typenode) ((typenode) & (0b11))
 #define _Py_TYPENODE_CLEAR_TAG(typenode) ((typenode) & (~(uintptr_t)(0b11)))
 
-#define _Py_TYPENODE_MAKE_ROOT(ptr) (_Py_TYPENODE_CLEAR_TAG(ptr) | TYPE_ROOT)
+#define _Py_TYPENODE_MAKE_ROOT_POSITIVE(ptr) (_Py_TYPENODE_CLEAR_TAG(ptr) | TYPE_ROOT_POSITIVE)
+#define _Py_TYPENODE_MAKE_ROOT_NEGATIVE(ptr) (_Py_TYPENODE_CLEAR_TAG(ptr) | TYPE_ROOT_NEGATIVE)
 #define _Py_TYPENODE_MAKE_REF(ptr) (_Py_TYPENODE_CLEAR_TAG(ptr) | TYPE_REF)
 
-#define _Py_TYPENODE_NULL 0
-#define _Py_TYPENODE_NULLROOT _Py_TYPENODE_MAKE_ROOT(_Py_TYPENODE_NULL)
+#define _Py_TYPENODE_POSITIVE_NULLROOT _Py_TYPENODE_MAKE_ROOT_POSITIVE(0)
+#define _Py_TYPENODE_NEGATIVE_NULLROOT _Py_TYPENODE_MAKE_ROOT_NEGATIVE((1 << _Py_NEGATIVE_BITMASK_LEN) - 1) << 2)
+
+#define _Py_TYPENODE_IS_ROOT(typenode) ((typenode) & 1)
+#define _Py_TYPENODE_IS_REF(typenode) (_Py_TYPENODE_GET_TAG(typenode) == TYPE_REF)
+#define _Py_TYPENODE_IS_POSITIVE_NULL(typenode) (typenode == _Py_TYPENODE_POSITIVE_NULLROOT)
+#define _Py_TYPENODE_IS_NEGATIVE_NULL(typenode) (typenode == _Py_TYPENODE_NEGATIVE_NULLROOT)
 
 // Tier 2 types meta interpreter
 typedef struct _PyTier2TypeContext {
