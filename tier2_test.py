@@ -519,7 +519,7 @@ with TestInfo("tier 2 BB_TEST_POP_IF_FALSE flag setting"):
 ######################################################################
 # Tests for: Tier 2 recursive functions block generation             #
 ######################################################################
-with TestInfo("tier 2 BB_TEST_POP_IF_FALSE flag setting"):
+with TestInfo("tier 2 recursive functions block generation"):
     # See https://github.com/pylbbv/pylbbv/issues/23 for more information.
     def f(x):
         # Force specialisation
@@ -532,6 +532,21 @@ with TestInfo("tier 2 BB_TEST_POP_IF_FALSE flag setting"):
 
     assert f(8) == 6
     assert f(8) == 6
+
+    # As long as it doesn't crash, everything's good.
+
+######################################################################
+# Tests for: Tier 2 specialisation in inner call                     #
+######################################################################
+with TestInfo("tier 2 specialisation in inner call"):
+    # See https://github.com/pylbbv/pylbbv/issues/33 for more information.
+    def f(x):
+        if x == 0: return 0
+        if x%2: return f(x-1)
+        return f(x-1)
+
+    for i in range(15): f(3)
+    f(3)
 
     # As long as it doesn't crash, everything's good.
 
