@@ -2486,6 +2486,7 @@ _Py_CODEUNIT *
 _PyCode_Tier2Warmup(_PyInterpreterFrame *frame, _Py_CODEUNIT *next_instr)
 {
     PyCodeObject *code = frame->f_code;
+    frame->is_tier2 = false;
     if (code->_tier2_warmup != 0) {
         code->_tier2_warmup++;
         if (code->_tier2_warmup >= 0) {
@@ -2494,6 +2495,11 @@ _PyCode_Tier2Warmup(_PyInterpreterFrame *frame, _Py_CODEUNIT *next_instr)
             // just fall back to the tier 1 interpreter.
             _Py_CODEUNIT *next = _PyCode_Tier2Initialize(frame, next_instr);
             if (next != NULL) {
+                assert(!frame->is_tier2);
+                frame->is_tier2 = true;
+                _Py_CODEUNIT *curr = (next_instr - 1);
+                assert(curr->op.code == RESUME || curr->op.code == RESUME_QUICK);
+                curr->op.code = RESUME_QUICK;
                 return next;
             }
         }

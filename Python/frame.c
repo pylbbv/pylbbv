@@ -17,10 +17,13 @@ _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)
     Py_VISIT(frame->f_code);
    /* locals */
     PyObject **locals = _PyFrame_GetLocalsArray(frame);
+    char *unboxed_bitmask = _PyFrame_GetUnboxedBitMask(frame);
     int i = 0;
     /* locals and stack */
     for (; i <frame->stacktop; i++) {
-        Py_VISIT(locals[i]);
+        if (!unboxed_bitmask[i]) {
+            Py_VISIT(locals[i]);
+        }
     }
     return 0;
 }
