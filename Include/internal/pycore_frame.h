@@ -62,13 +62,14 @@ typedef struct _PyInterpreterFrame {
     int stacktop;  /* Offset of TOS from localsplus  */
     uint16_t yield_offset;
     char owner;
+    bool is_tier2;
     /* Locals and stack and unboxed bit mask */
     PyObject *localsplus[1];
 } _PyInterpreterFrame;
 
 static inline int
 _PyInterpreterFrame_LASTI(_PyInterpreterFrame *f) {
-    if (f->f_code->_tier2_info != NULL) {
+    if (f->is_tier2 && f->f_code->_tier2_info != NULL) {
         return ((int)((f)->prev_instr - f->f_code->_tier2_info->_bb_space->u_code));
     }
     return ((int)((f)->prev_instr - _PyCode_CODE((f)->f_code)));
@@ -130,9 +131,11 @@ _PyFrame_Initialize(
     frame->stacktop = code->co_nlocalsplus;
     frame->frame_obj = NULL;
     if (code->_tier2_info != NULL) {
+        frame->is_tier2 = true;
         frame->prev_instr = code->_tier2_info->_entry_bb->tier2_start - 1;
     }
     else {
+        frame->is_tier2 = false;
         frame->prev_instr = _PyCode_CODE(code) - 1;
     }
     frame->yield_offset = 0;
