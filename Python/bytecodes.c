@@ -3284,7 +3284,7 @@ dummy_func(
 
         // Tier 2 instructions
         // Type propagator assumes this doesn't affect type context
-        inst(BB_BRANCH, (unused/1 --)) {
+        inst(BB_BRANCH, (unused/2 --)) {
             _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             _Py_CODEUNIT *tier1_fallback = NULL;
@@ -3314,14 +3314,14 @@ dummy_func(
                     DISPATCH();
                 }
             }
-            // Their addresses should be the same. Because
-            // The first BB should be generated right after the previous one.
-            assert(next_instr + INLINE_CACHE_ENTRIES_BB_BRANCH == t2_nextinstr);
+            Py_ssize_t forward_jump = t2_nextinstr - next_instr;
+            assert((uint16_t)forward_jump == forward_jump);
+            cache->successor_jumpby = (uint16_t)forward_jump;
             next_instr = t2_nextinstr;
             DISPATCH();
         }
 
-        inst(BB_BRANCH_IF_FLAG_UNSET, (unused/1 --)) {
+        inst(BB_BRANCH_IF_FLAG_UNSET, (unused/2 --)) {
             if (!BB_TEST_IS_SUCCESSOR(bb_test)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
@@ -3341,17 +3341,22 @@ dummy_func(
                 _PyTier2_RewriteForwardJump(curr, next_instr);
                 DISPATCH();
             }
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
+            DISPATCH();
         }
 
-        inst(BB_JUMP_IF_FLAG_UNSET, (unused/1 --)) {
+        inst(BB_JUMP_IF_FLAG_UNSET, (unused/2 --)) {
             if (!BB_TEST_IS_SUCCESSOR(bb_test)) {
                 JUMPBY(oparg);
                 DISPATCH();
             }
-            // Fall through to next instruction.
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
+            DISPATCH();
         }
 
-        inst(BB_BRANCH_IF_FLAG_SET, (unused/1 --)) {
+        inst(BB_BRANCH_IF_FLAG_SET, (unused/2 --)) {
             if (BB_TEST_IS_SUCCESSOR(bb_test)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
@@ -3371,14 +3376,19 @@ dummy_func(
                 _PyTier2_RewriteForwardJump(curr, next_instr);
                 DISPATCH();
             }
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
+            DISPATCH();
         }
 
-        inst(BB_JUMP_IF_FLAG_SET, (unused/1 --)) {
+        inst(BB_JUMP_IF_FLAG_SET, (unused/2 --)) {
             if (BB_TEST_IS_SUCCESSOR(bb_test)) {
                 JUMPBY(oparg);
                 DISPATCH();
             }
-            // Fall through to next instruction.
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            JUMPBY(cache->successor_jumpby);
+            DISPATCH();
         }
 
         // Type propagator assumes this doesn't affect type context

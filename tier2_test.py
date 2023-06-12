@@ -236,7 +236,6 @@ with TestInfo("type guard"):
         "CHECK_FLOAT", # First ladder check
         "NOP",
         "BB_JUMP_IF_FLAG_SET", # Rewrite to jump to float case
-        "POP_TOP", # Pop result
 
         # The same as above
         "CHECK_INT",
@@ -498,7 +497,6 @@ with TestInfo("tier 2 BB_BRANCH_IF_FLAG_SET codegen"):
 ######################################################################
 with TestInfo("tier 2 BB_TEST_POP_IF_FALSE flag setting"):
     # See https://github.com/pylbbv/pylbbv/issues/23 for more information.
-    import sys
 
     class A:
         def __init__(self): ...
@@ -515,6 +513,25 @@ with TestInfo("tier 2 BB_TEST_POP_IF_FALSE flag setting"):
     assert f(1) == "Hewwo!"
     assert f(0) == 2
     assert f(0) == 2
+
+    # As long as it doesn't crash, everything's good.
+
+######################################################################
+# Tests for: Tier 2 recursive functions block generation             #
+######################################################################
+with TestInfo("tier 2 BB_TEST_POP_IF_FALSE flag setting"):
+    # See https://github.com/pylbbv/pylbbv/issues/23 for more information.
+    def f(x):
+        # Force specialisation
+        x + x
+        if x == 3:
+            return 1
+        return f(x-1) + 1
+
+    trigger_tier2(f, (8,))
+
+    assert f(8) == 6
+    assert f(8) == 6
 
     # As long as it doesn't crash, everything's good.
 

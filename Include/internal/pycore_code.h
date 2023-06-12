@@ -12,6 +12,7 @@ typedef struct {
     // The LSB indicates whether the bb branch is a type guard or not.
     // To get the actual BB ID, do a right bit shift by one.
     uint16_t bb_id_tagged;
+    uint16_t successor_jumpby;
 } _PyBBBranchCache;
 
 #define INLINE_CACHE_ENTRIES_BB_BRANCH CACHE_ENTRIES(_PyBBBranchCache)

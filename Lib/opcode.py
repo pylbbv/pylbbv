@@ -386,6 +386,10 @@ _specializations = {
     "SEND": [
         "SEND_GEN",
     ],
+    "BB_BRANCH": [
+        "BB_BRANCH_IF_FLAG_SET",
+        "BB_BRANCH_IF_FLAG_UNSET",
+    ]
 }
 _specialized_instructions = [
     opcode for family in _specializations.values() for opcode in family
@@ -439,6 +443,10 @@ _cache_format = {
     },
     "SEND": {
         "counter": 1,
+    },
+    "BB_BRANCH" : {
+        "bb_id": 1,
+        "forward_jumpby": 1
     },
 }
 

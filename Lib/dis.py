@@ -62,8 +62,7 @@ for uop_opcode, uop in zip(_empty_slot, _uops):
     if uop.startswith('BB_BRANCH') or uop.startswith('BB_JUMP'):
         if uop.startswith('BB_JUMP'):
             _bb_jumps.append(uop_opcode)
-        if uop.startswith('BB_BRANCH'):
-            _inline_cache_entries[uop_opcode] = 1
+        _inline_cache_entries[uop_opcode] = 2
         _uop_hasoparg.append(uop_opcode)
 
 deoptmap = {
