@@ -36,6 +36,38 @@ PyTypeObject PySmallInt_Type = {
 
 static inline int IS_SCOPE_EXIT_OPCODE(int opcode);
 
+////////// TYPE NODES FUNCTIONS
+
+PyTypeObject *bit_to_typeobject(int bitidx)
+{
+    assert(2 <= bitidx && bitidx < _Py_NEGATIVE_BITMASK_LEN + 2);
+    static PyTypeObject* map[] = { NULL, NULL, &PyFloat_Type, &PyLong_Type, &PyList_Type };
+    return map[bitidx];
+}
+
+_Py_NegativeTypeMaskBit typeobject_to_bitidx(PyTypeObject *typeobject)
+{
+    if (typeobject == &PyFloat_Type) return FLOAT_BITIDX;
+    if (typeobject == &PyLong_Type) return LONG_BITIDX;
+    if (typeobject == &PyList_Type) return LIST_BITIDX;
+
+    fprintf(stderr, "Unsupported type in negative bitmask: %s\n", typeobject->tp_name);
+    Py_UNREACHABLE();
+}
+
+_Py_TYPENODE_t set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
+{
+    assert(_Py_TYPENODE_GET_TAG(node) == TYPE_ROOT_NEGATIVE);
+    _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
+    return node | ((_Py_TYPENODE_t)1 << bitidx);
+}
+
+bool has_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
+{
+    assert(_Py_TYPENODE_GET_TAG(node) == TYPE_ROOT_NEGATIVE);
+    _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
+    return (node & ((_Py_TYPENODE_t)1 << bitidx)) != 0;
+}
 
 ////////// TYPE CONTEXT FUNCTIONS
 

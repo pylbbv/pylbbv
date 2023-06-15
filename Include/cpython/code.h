@@ -71,8 +71,17 @@ typedef enum _Py_TypeNodeTags {
     TYPE_ROOT_NEGATIVE = 3
 } _Py_TypeNodeTags;
 
-// @TODO define bitmask
-#define _Py_NEGATIVE_BITMASK_LEN 4
+// We only need negative bitmasks
+// for types we emit checks for
+// If more types are added, update:
+//   - bit_to_typeobject
+//   - typeobject_to_bitidx
+#define _Py_NEGATIVE_BITMASK_LEN 3
+typedef enum _Py_NegativeTypeMaskBit {
+    FLOAT_BITIDX = 2,
+    LONG_BITIDX = 3,
+    LIST_BITIDX = 4
+} _Py_NegativeTypeMaskBit;
 
 #define _Py_TYPENODE_GET_TAG(typenode) ((typenode) & (0b11))
 #define _Py_TYPENODE_CLEAR_TAG(typenode) ((typenode) & (~(uintptr_t)(0b11)))
