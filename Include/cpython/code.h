@@ -76,11 +76,13 @@ typedef enum _Py_TypeNodeTags {
 // If more types are added, update:
 //   - bit_to_typeobject
 //   - typeobject_to_bitidx
-#define _Py_NEGATIVE_BITMASK_LEN 3
+#define _Py_NEGATIVE_BITMASK_LEN 5
 typedef enum _Py_NegativeTypeMaskBit {
     FLOAT_BITIDX = 2,
-    LONG_BITIDX = 3,
-    LIST_BITIDX = 4
+    RAWFLOAT_BITIDX = 3,
+    LONG_BITIDX = 4,
+    SMALLINT_BITIDX = 5,
+    LIST_BITIDX = 6
 } _Py_NegativeTypeMaskBit;
 
 #define _Py_TYPENODE_GET_TAG(typenode) ((typenode) & (0b11))
@@ -91,12 +93,10 @@ typedef enum _Py_NegativeTypeMaskBit {
 #define _Py_TYPENODE_MAKE_REF(ptr) (_Py_TYPENODE_CLEAR_TAG(ptr) | TYPE_REF)
 
 #define _Py_TYPENODE_POSITIVE_NULLROOT _Py_TYPENODE_MAKE_ROOT_POSITIVE(0)
-#define _Py_TYPENODE_NEGATIVE_NULLROOT _Py_TYPENODE_MAKE_ROOT_NEGATIVE((1 << _Py_NEGATIVE_BITMASK_LEN) - 1) << 2)
 
 #define _Py_TYPENODE_IS_ROOT(typenode) ((typenode) & 1)
 #define _Py_TYPENODE_IS_REF(typenode) (_Py_TYPENODE_GET_TAG(typenode) == TYPE_REF)
 #define _Py_TYPENODE_IS_POSITIVE_NULL(typenode) (typenode == _Py_TYPENODE_POSITIVE_NULLROOT)
-#define _Py_TYPENODE_IS_NEGATIVE_NULL(typenode) (typenode == _Py_TYPENODE_NEGATIVE_NULLROOT)
 
 // Tier 2 types meta interpreter
 typedef struct _PyTier2TypeContext {
