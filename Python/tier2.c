@@ -663,9 +663,12 @@ print_typestack(const _PyTier2TypeContext *type_context)
 
     fprintf(stderr, "      Stack: %p: [", type_stack);
     for (int i = 0; i < nstack; i++) {
-        _Py_TYPENODE_t node = type_stack[i];
-        PyTypeObject *type = typenode_get_type(node);
+        _Py_TYPENODE_t node = type_locals[i];
         _Py_TYPENODE_t tag = _Py_TYPENODE_GET_TAG(node);
+
+        _Py_TYPENODE_t type = typenode_get_root(node);
+
+        fprintf(stderr, "%s", i == nstack_use ? "." : " ");
 
         if (tag == TYPE_REF) {
             _Py_TYPENODE_t *parent = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(node));
@@ -677,9 +680,14 @@ print_typestack(const _PyTier2TypeContext *type_context)
             }
         }
 
-        fprintf(stderr, "%s%s",
-            i == nstack_use ? "." : " ",
-            type == NULL ? "?" : type->tp_name);
+        if (_Py_TYPENODE_GET_TAG(type) == TYPE_ROOT_NEGATIVE) {
+            fprintf(stderr, "NEG[%p]",
+                (void *)(type >> 2));
+        } else {
+            PyTypeObject *ptr = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(type);
+            fprintf(stderr, "%s",
+                ptr == NULL ? "?" : ptr->tp_name);
+        }
         if (tag == TYPE_REF) {
             fprintf(stderr, "%s%d]",
                 is_local ? "->locals[" : "->stack[",
@@ -691,8 +699,9 @@ print_typestack(const _PyTier2TypeContext *type_context)
     fprintf(stderr, "      Locals %p: [", type_locals);
     for (int i = 0; i < nlocals; i++) {
         _Py_TYPENODE_t node = type_locals[i];
-        PyTypeObject *type = typenode_get_type(node);
         _Py_TYPENODE_t tag = _Py_TYPENODE_GET_TAG(node);
+
+        _Py_TYPENODE_t type = typenode_get_root(node);
 
         if (tag == TYPE_REF) {
             _Py_TYPENODE_t *parent = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(node));
@@ -704,8 +713,14 @@ print_typestack(const _PyTier2TypeContext *type_context)
             }
         }
 
-        fprintf(stderr, " %s",
-            type == NULL ? "?" : type->tp_name);
+        if (_Py_TYPENODE_GET_TAG(type) == TYPE_ROOT_NEGATIVE) {
+            fprintf(stderr, " NEG[%p]",
+                (void *)(type >> 2));
+        } else {
+            PyTypeObject *ptr = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(type);
+            fprintf(stderr, " %s",
+                ptr == NULL ? "?" : ptr->tp_name);
+        }
         if (tag == TYPE_REF) {
             fprintf(stderr, "%s%d]",
                 is_local ? "->locals[" : "->stack[",
@@ -2685,10 +2700,19 @@ _PyTier2_GenerateNextBBMetaWithTypeContext(
                 prev_type_guard->op.arg, type_context_copy, NULL);
         }
         else {
-            _Py_TYPENODE_t *node = &type_context_copy->type_stack_ptr[-1 - prev_type_guard->op.arg];
-            *node = set_negativetype(
-                _Py_TYPENODE_MAKE_ROOT_NEGATIVE(*node),
+            _Py_TYPENODE_t *dst = &(type_context_copy->type_stack_ptr[-1 - prev_type_guard->op.arg]);
+            _Py_TYPENODE_t dstroot = typenode_get_root(*dst);
+            assert(
+                _Py_TYPENODE_GET_TAG(dstroot) == TYPE_ROOT_NEGATIVE
+                || _Py_TYPENODE_IS_POSITIVE_NULL(dstroot));
+            _Py_TYPENODE_t src = set_negativetype(
+                _Py_TYPENODE_MAKE_ROOT_NEGATIVE(0),
                 guardopcode_to_typeobject(guard_opcode));
+            __type_propagate_TYPE_SET((_Py_TYPENODE_t *)src, dst, true);
+#if TYPEPROP_DEBUG && defined(Py_DEBUG)
+            fprintf(stderr,"  [+] Guard failure. Type context:\n");
+            print_typestack(type_context_copy);
+#endif
         }
     }
     _PyTier2BBMetadata *metadata = _PyTier2_Code_DetectAndEmitBB(
