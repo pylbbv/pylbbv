@@ -677,7 +677,7 @@ print_typestack(const _PyTier2TypeContext *type_context)
 
     fprintf(stderr, "      Stack: %p: [", type_stack);
     for (int i = 0; i < nstack; i++) {
-        _Py_TYPENODE_t node = type_locals[i];
+        _Py_TYPENODE_t node = type_stack[i];
         _Py_TYPENODE_t tag = _Py_TYPENODE_GET_TAG(node);
 
         _Py_TYPENODE_t type = typenode_get_root(node);
