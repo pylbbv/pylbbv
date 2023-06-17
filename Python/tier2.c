@@ -70,7 +70,7 @@ _Py_TYPENODE_t set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
 
 bool has_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
 {
-    if (_Py_TYPENODE_GET_TAG(node) == TYPE_ROOT_NEGATIVE) {
+    if (_Py_TYPENODE_GET_TAG(node) != TYPE_ROOT_NEGATIVE) {
         return false;
     }
     _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
@@ -1116,7 +1116,8 @@ rebox_stack(_Py_CODEUNIT *write_curr,
 {
     for (int i = 0; i < num_elements; i++) {
         _Py_TYPENODE_t *curr = type_context->type_stack_ptr - 1 - i;
-        if (typenode_get_type(*curr) == &PyRawFloat_Type) {
+        if (_Py_TYPENODE_GET_TAG(typenode_get_root(*curr)) != TYPE_ROOT_NEGATIVE &&
+            typenode_get_type(*curr) == &PyRawFloat_Type) {
             write_curr->op.code = BOX_FLOAT;
             write_curr->op.arg = i;
             write_curr++;
@@ -1541,12 +1542,22 @@ infer_BINARY_OP(
 
     if (_Py_TYPENODE_IS_POSITIVE_NULL(rightroot)) {
         *needs_guard = true;
-        emit_type_guard(write_curr, CHECK_FLOAT, 0, bb_id);
+        write_curr = emit_type_guard(write_curr, CHECK_FLOAT, 0, bb_id);
+        return write_curr;
+    }
+    if (has_negativetype(rightroot, &PyFloat_Type)) {
+        *needs_guard = true;
+        write_curr = emit_type_guard(write_curr, CHECK_INT, 0, bb_id);
         return write_curr;
     }
     if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)) {
         *needs_guard = true;
-        emit_type_guard(write_curr, CHECK_FLOAT, 1, bb_id);
+        write_curr = emit_type_guard(write_curr, CHECK_FLOAT, 1, bb_id);
+        return write_curr;
+    }
+    if (has_negativetype(leftroot, &PyFloat_Type)) {
+        *needs_guard = true;
+        write_curr = emit_type_guard(write_curr, CHECK_INT, 1, bb_id);
         return write_curr;
     }
 
@@ -1554,20 +1565,9 @@ infer_BINARY_OP(
         && _Py_TYPENODE_CLEAR_TAG(leftroot) == END_GUARD)
         || (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
             && _Py_TYPENODE_CLEAR_TAG(rightroot) == END_GUARD)) {
-        write_curr = rebox_stack(write_curr, type_context, 2);
-        return write_curr;
+        return NULL;
     }
 
-    if (has_negativetype(rightroot, &PyFloat_Type)) {
-        *needs_guard = true;
-        emit_type_guard(write_curr, CHECK_INT, 0, bb_id);
-        return write_curr;
-    }
-    if (has_negativetype(leftroot, &PyFloat_Type)) {
-        *needs_guard = true;
-        emit_type_guard(write_curr, CHECK_INT, 1, bb_id);
-        return write_curr;
-    }
 
     PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
     PyTypeObject *lefttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(leftroot);
@@ -1616,8 +1616,7 @@ infer_BINARY_OP(
         return write_curr;
     }
 
-    write_curr = rebox_stack(write_curr, type_context, 2);
-    return write_curr;
+    return NULL;
 
     // TODO vvvv Remove
 /*
