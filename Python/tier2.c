@@ -38,6 +38,11 @@ static inline int IS_SCOPE_EXIT_OPCODE(int opcode);
 
 ////////// TYPE NODES FUNCTIONS
 
+/**
+ * @brief Maps _Py_NegativeTypeMaskBit to typeobject
+ * @param bitidx _Py_NegativeTypeMaskBit
+ * @return Corresponding typeobject
+*/
 PyTypeObject *bit_to_typeobject(int bitidx)
 {
     assert(2 <= bitidx && bitidx < _Py_NEGATIVE_BITMASK_LEN + 2);
@@ -49,6 +54,11 @@ PyTypeObject *bit_to_typeobject(int bitidx)
     return map[bitidx];
 }
 
+/**
+ * @brief Inverse of bit_to_typeobject
+ * @param typeobject typeobject
+ * @return Corresponding _Py_NegativeTypeMaskBit
+*/
 _Py_NegativeTypeMaskBit typeobject_to_bitidx(PyTypeObject *typeobject)
 {
     if (typeobject == &PyFloat_Type) return FLOAT_BITIDX;
@@ -61,6 +71,12 @@ _Py_NegativeTypeMaskBit typeobject_to_bitidx(PyTypeObject *typeobject)
     Py_UNREACHABLE();
 }
 
+/**
+ * @brief Sets the corresponding negative type bit in a typenode
+ * @param node node to be modified
+ * @param typeobject typeobject to set as negative
+ * @return Updated node
+*/
 _Py_TYPENODE_t set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
 {
     assert(_Py_TYPENODE_GET_TAG(node) == TYPE_ROOT_NEGATIVE);
@@ -68,15 +84,25 @@ _Py_TYPENODE_t set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
     return node | ((_Py_TYPENODE_t)1 << bitidx);
 }
 
-bool has_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
+/**
+ * @brief Checks if the root contains a negative type of the typeobject.
+ *   If the node has positive type, throws assertion.
+ * @param rootnode a negative type root to be queried upon
+ * @param typeobject typeobject to be queries upon
+ * @return If root contains said negative type
+*/
+bool root_has_negativetype(_Py_TYPENODE_t rootnode, PyTypeObject *typeobject)
 {
-    if (_Py_TYPENODE_GET_TAG(node) != TYPE_ROOT_NEGATIVE) {
-        return false;
-    }
+    assert(_Py_TYPENODE_GET_TAG(rootnode) == TYPE_ROOT_NEGATIVE);
     _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
-    return (node & ((_Py_TYPENODE_t)1 << bitidx)) != 0;
+    return (rootnode & ((_Py_TYPENODE_t)1 << bitidx)) != 0;
 }
 
+/**
+ * @brief Maps guard opcode to typeobject
+ * @param guard_opcode
+ * @return Corresponding typeobject
+*/
 PyTypeObject *guardopcode_to_typeobject(uint8_t guard_opcode)
 {
     switch (guard_opcode) {
@@ -264,6 +290,7 @@ _PyTier2TypeContext_Free(_PyTier2TypeContext *type_context)
     PyMem_Free(type_context);
 }
 
+// TODO: Refactor code to accept any node pointer
 static _Py_TYPENODE_t*
 __typenode_get_rootptr(_Py_TYPENODE_t ref)
 {
@@ -275,6 +302,11 @@ __typenode_get_rootptr(_Py_TYPENODE_t ref)
     return ref_ptr;
 }
 
+/**
+ * @brief Get read-only root of the node
+ * @param node
+ * @return root of node
+*/
 static _Py_TYPENODE_t
 typenode_get_root(_Py_TYPENODE_t node)
 {
@@ -1528,8 +1560,6 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, _PyTier2BBMetadata *meta,
  * @param t2_start Start of the current basic block.
  * @param oparg Oparg of the BINARY_OP.
  * @param needs_guard Signals to the caller whether they should emit a type guard.
- * @param prev_type_guard The previous basic block's ending type guard (this is
- * required for the ladder of types).
  * 
  * @param raw_op The tier 0/1 BINARY_OP.
  * @param write_curr Tier 2 instruction write buffer.
@@ -1563,7 +1593,8 @@ infer_BINARY_OP(
         && ((_Py_TYPENODE_CLEAR_TAG(rightroot) & END_GUARD) == END_GUARD)) {
         return NULL;
     }
-    if (has_negativetype(rightroot, &PyFloat_Type)) {
+    if (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
+        && root_has_negativetype(rightroot, &PyFloat_Type)) {
         *needs_guard = true;
         write_curr = emit_type_guard(write_curr, CHECK_INT, 0, bb_id);
         return write_curr;
@@ -1681,7 +1712,7 @@ infer_BINARY_SUBSCR(
     }
     if (_Py_TYPENODE_IS_POSITIVE_NULL(container_root)
         || (container_tag == TYPE_ROOT_NEGATIVE &&
-            !has_negativetype(container_root, &PyList_Type))) {
+            !root_has_negativetype(container_root, &PyList_Type))) {
         *needs_guard = true;
         return emit_type_guard(write_curr, CHECK_LIST, 1, bb_id);
     }
