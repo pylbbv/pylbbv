@@ -64,8 +64,8 @@ jobs:
     - name: Build CPython
       run: .\PCbuild\build.bat -e -d -p x64
       timeout-minutes: 30
-    - name: Display build info
-      run: .\python.bat -m test.pythoninfo
+    # - name: Display build info
+    #   run: .\python.bat -m test.pythoninfo
     - name: Tests
       run: .\python.bat tier2_test.py
 
@@ -116,9 +116,9 @@ jobs:
     - name: Build CPython out-of-tree
       working-directory: ${{ env.CPYTHON_BUILDDIR }}
       run: make -j4
-    - name: Display build info
-      working-directory: ${{ env.CPYTHON_BUILDDIR }}
-      run: make pythoninfo
+    # - name: Display build info
+    #   working-directory: ${{ env.CPYTHON_BUILDDIR }}
+    #   run: make pythoninfo
     - name: Remount sources writable for tests
       # some tests write to srcdir, lack of pyc files slows down testing
       run: sudo mount $CPYTHON_RO_SRCDIR -oremount,rw
