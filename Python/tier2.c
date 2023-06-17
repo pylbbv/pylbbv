@@ -43,7 +43,8 @@ static inline int IS_SCOPE_EXIT_OPCODE(int opcode);
  * @param bitidx _Py_NegativeTypeMaskBit
  * @return Corresponding typeobject
 */
-PyTypeObject *bit_to_typeobject(int bitidx)
+PyTypeObject *
+bit_to_typeobject(int bitidx)
 {
     assert(2 <= bitidx && bitidx < _Py_NEGATIVE_BITMASK_LEN + 2);
     static PyTypeObject* map[] = {
@@ -59,7 +60,8 @@ PyTypeObject *bit_to_typeobject(int bitidx)
  * @param typeobject typeobject
  * @return Corresponding _Py_NegativeTypeMaskBit
 */
-_Py_NegativeTypeMaskBit typeobject_to_bitidx(PyTypeObject *typeobject)
+_Py_NegativeTypeMaskBit
+typeobject_to_bitidx(PyTypeObject *typeobject)
 {
     if (typeobject == &PyFloat_Type) return FLOAT_BITIDX;
     if (typeobject == &PyRawFloat_Type) return RAWFLOAT_BITIDX;
@@ -77,7 +79,8 @@ _Py_NegativeTypeMaskBit typeobject_to_bitidx(PyTypeObject *typeobject)
  * @param typeobject typeobject to set as negative
  * @return Updated node
 */
-_Py_TYPENODE_t set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
+_Py_TYPENODE_t
+set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
 {
     assert(_Py_TYPENODE_GET_TAG(node) == TYPE_ROOT_NEGATIVE);
     _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
@@ -91,7 +94,8 @@ _Py_TYPENODE_t set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
  * @param typeobject typeobject to be queries upon
  * @return If root contains said negative type
 */
-bool root_has_negativetype(_Py_TYPENODE_t rootnode, PyTypeObject *typeobject)
+bool
+root_has_negativetype(_Py_TYPENODE_t rootnode, PyTypeObject *typeobject)
 {
     assert(_Py_TYPENODE_GET_TAG(rootnode) == TYPE_ROOT_NEGATIVE);
     _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
@@ -103,7 +107,8 @@ bool root_has_negativetype(_Py_TYPENODE_t rootnode, PyTypeObject *typeobject)
  * @param guard_opcode
  * @return Corresponding typeobject
 */
-PyTypeObject *guardopcode_to_typeobject(uint8_t guard_opcode)
+PyTypeObject *
+guardopcode_to_typeobject(uint8_t guard_opcode)
 {
     switch (guard_opcode) {
     case CHECK_INT: return &PyLong_Type;
@@ -386,7 +391,8 @@ typenode_get_location(_PyTier2TypeContext *ctx, _Py_TYPENODE_t *node, bool *is_l
  * @param y Node from the same type context as `x`
  * @return If `x` and `y` belong to the same tree in the type context
 */
-static bool typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
+static bool
+typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
 {
     _Py_TYPENODE_t *x_rootref = x;
     _Py_TYPENODE_t *y_rootref = y;
