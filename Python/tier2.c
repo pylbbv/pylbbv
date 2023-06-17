@@ -1555,7 +1555,7 @@ infer_BINARY_OP(
         || (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
             && _Py_TYPENODE_CLEAR_TAG(rightroot) == END_GUARD)) {
         write_curr = rebox_stack(write_curr, type_context, 2);
-        return NULL;
+        return write_curr;
     }
 
     if (has_negativetype(rightroot, &PyFloat_Type)) {
@@ -1617,7 +1617,7 @@ infer_BINARY_OP(
     }
 
     write_curr = rebox_stack(write_curr, type_context, 2);
-    return NULL;
+    return write_curr;
 
     // TODO vvvv Remove
 /*
@@ -2702,13 +2702,14 @@ _PyTier2_GenerateNextBBMetaWithTypeContext(
         else {
             _Py_TYPENODE_t *dst = &(type_context_copy->type_stack_ptr[-1 - prev_type_guard->op.arg]);
             _Py_TYPENODE_t dstroot = typenode_get_root(*dst);
+            // Check if we are removing any type information.
             assert(
                 _Py_TYPENODE_GET_TAG(dstroot) == TYPE_ROOT_NEGATIVE
                 || _Py_TYPENODE_IS_POSITIVE_NULL(dstroot));
             _Py_TYPENODE_t src = set_negativetype(
                 _Py_TYPENODE_MAKE_ROOT_NEGATIVE(0),
                 guardopcode_to_typeobject(guard_opcode));
-            __type_propagate_TYPE_SET((_Py_TYPENODE_t *)src, dst, true);
+            TYPE_SET((_Py_TYPENODE_t *)src, dst, true);
 #if TYPEPROP_DEBUG && defined(Py_DEBUG)
             fprintf(stderr,"  [+] Guard failure. Type context:\n");
             print_typestack(type_context_copy);
