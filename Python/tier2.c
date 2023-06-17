@@ -313,7 +313,7 @@ typenode_get_type(_Py_TYPENODE_t node)
 static inline bool
 typenode_root_is_negative(_Py_TYPENODE_t node)
 {
-    return _Py_TYPENODE_GET_TAG(typenode_get_root(node)) != TYPE_ROOT_NEGATIVE;
+    return _Py_TYPENODE_GET_TAG(typenode_get_root(node)) == TYPE_ROOT_NEGATIVE;
 }
 
 /**
