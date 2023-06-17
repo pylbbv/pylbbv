@@ -495,13 +495,13 @@ class Instruction:
 
         # TODO: Detech TYPE_SWAP case
 
-        nullnode = "(_Py_TYPENODE_t *)_Py_TYPENODE_NULLROOT"
+        nullnode = "(_Py_TYPENODE_t *)_Py_TYPENODE_POSITIVE_NULLROOT"
         type_overwrite = "TYPE_OVERWRITE"
         null = "NULL"
         true_str = "true"
         false_str = "false"
         typenode_ptr = "_Py_TYPENODE_t *"
-        literal_root_format = "(_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT((_Py_TYPENODE_t)&%s)"
+        literal_root_format = "(_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT_POSITIVE((_Py_TYPENODE_t)&%s)"
         typestackpeek_format = "TYPESTACK_PEEK(%s)"
         typelocalsget_format = "TYPELOCALS_GET(%s)"
         typeconstsget_format = "(_Py_TYPENODE_t *)TYPECONST_GET(%s)"

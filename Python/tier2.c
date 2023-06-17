@@ -36,6 +36,88 @@ PyTypeObject PySmallInt_Type = {
 
 static inline int IS_SCOPE_EXIT_OPCODE(int opcode);
 
+////////// TYPE NODES FUNCTIONS
+
+/**
+ * @brief Maps _Py_NegativeTypeMaskBit to typeobject
+ * @param bitidx _Py_NegativeTypeMaskBit
+ * @return Corresponding typeobject
+*/
+PyTypeObject *
+bit_to_typeobject(int bitidx)
+{
+    assert(2 <= bitidx && bitidx < _Py_NEGATIVE_BITMASK_LEN + 2);
+    static PyTypeObject* map[] = {
+        NULL, NULL,
+        &PyFloat_Type, &PyRawFloat_Type,
+        &PyLong_Type, &PySmallInt_Type ,
+        &PyList_Type };
+    return map[bitidx];
+}
+
+/**
+ * @brief Inverse of bit_to_typeobject
+ * @param typeobject typeobject
+ * @return Corresponding _Py_NegativeTypeMaskBit
+*/
+_Py_NegativeTypeMaskBit
+typeobject_to_bitidx(PyTypeObject *typeobject)
+{
+    if (typeobject == &PyFloat_Type) return FLOAT_BITIDX;
+    if (typeobject == &PyRawFloat_Type) return RAWFLOAT_BITIDX;
+    if (typeobject == &PyLong_Type) return LONG_BITIDX; 
+    if (typeobject == &PySmallInt_Type) return SMALLINT_BITIDX;
+    if (typeobject == &PyList_Type) return LIST_BITIDX;
+
+    fprintf(stderr, "Unsupported type in negative bitmask: %s\n", typeobject->tp_name);
+    Py_UNREACHABLE();
+}
+
+/**
+ * @brief Sets the corresponding negative type bit in a typenode
+ * @param node node to be modified
+ * @param typeobject typeobject to set as negative
+ * @return Updated node
+*/
+_Py_TYPENODE_t
+set_negativetype(_Py_TYPENODE_t node, PyTypeObject *typeobject)
+{
+    assert(_Py_TYPENODE_GET_TAG(node) == TYPE_ROOT_NEGATIVE);
+    _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
+    return node | ((_Py_TYPENODE_t)1 << bitidx);
+}
+
+/**
+ * @brief Checks if the root contains a negative type of the typeobject.
+ *   If the node has positive type, throws assertion.
+ * @param rootnode a negative type root to be queried upon
+ * @param typeobject typeobject to be queries upon
+ * @return If root contains said negative type
+*/
+bool
+root_has_negativetype(_Py_TYPENODE_t rootnode, PyTypeObject *typeobject)
+{
+    assert(_Py_TYPENODE_GET_TAG(rootnode) == TYPE_ROOT_NEGATIVE);
+    _Py_NegativeTypeMaskBit bitidx = typeobject_to_bitidx(typeobject);
+    return (rootnode & ((_Py_TYPENODE_t)1 << bitidx)) != 0;
+}
+
+/**
+ * @brief Maps guard opcode to typeobject
+ * @param guard_opcode
+ * @return Corresponding typeobject
+*/
+PyTypeObject *
+guardopcode_to_typeobject(uint8_t guard_opcode)
+{
+    switch (guard_opcode) {
+    case CHECK_INT: return &PyLong_Type;
+    case CHECK_FLOAT: return &PyFloat_Type;
+    case CHECK_LIST: return &PyList_Type;
+    }
+    fprintf(stderr, "Unsupported guard_opcode in mapping to typeobject: %d\n", guard_opcode);
+    Py_UNREACHABLE();
+}
 
 ////////// TYPE CONTEXT FUNCTIONS
 
@@ -67,10 +149,10 @@ initialize_type_context(const PyCodeObject *co)
 
     // Initialize to unknown type.
     for (int i = 0; i < nlocals; i++) {
-        type_locals[i] = _Py_TYPENODE_NULLROOT;
+        type_locals[i] = _Py_TYPENODE_POSITIVE_NULLROOT;
     }
     for (int i = 0; i < nstack; i++) {
-        type_stack[i] = _Py_TYPENODE_NULLROOT;
+        type_stack[i] = _Py_TYPENODE_POSITIVE_NULLROOT;
     }
 
     _PyTier2TypeContext *type_context = PyMem_Malloc(sizeof(_PyTier2TypeContext));
@@ -128,7 +210,8 @@ _PyTier2TypeContext_Copy(const _PyTier2TypeContext *type_context)
         _Py_TYPENODE_t node = type_context->type_locals[i];
         switch _Py_TYPENODE_GET_TAG(node)
         {
-        case TYPE_ROOT:
+        case TYPE_ROOT_POSITIVE:
+        case TYPE_ROOT_NEGATIVE:
             type_locals[i] = node;
             break;
         case TYPE_REF: {
@@ -159,7 +242,8 @@ _PyTier2TypeContext_Copy(const _PyTier2TypeContext *type_context)
         _Py_TYPENODE_t node = type_context->type_stack[i];
         switch _Py_TYPENODE_GET_TAG(node)
         {
-        case TYPE_ROOT:
+        case TYPE_ROOT_POSITIVE:
+        case TYPE_ROOT_NEGATIVE:
             type_stack[i] = node;
             break;
         case TYPE_REF: {
@@ -211,17 +295,36 @@ _PyTier2TypeContext_Free(_PyTier2TypeContext *type_context)
     PyMem_Free(type_context);
 }
 
+// TODO: Refactor code to accept any node pointer
 static _Py_TYPENODE_t*
 __typenode_get_rootptr(_Py_TYPENODE_t ref)
 {
-    uintptr_t tag;
     _Py_TYPENODE_t *ref_ptr;
     do {
         ref_ptr = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(ref));
         ref = *ref_ptr;
-        tag = _Py_TYPENODE_GET_TAG(ref);
-    } while (tag != TYPE_ROOT);
+    } while (!_Py_TYPENODE_IS_ROOT(ref));
     return ref_ptr;
+}
+
+/**
+ * @brief Get read-only root of the node
+ * @param node
+ * @return root of node
+*/
+static _Py_TYPENODE_t
+typenode_get_root(_Py_TYPENODE_t node)
+{
+    uintptr_t tag = _Py_TYPENODE_GET_TAG(node);
+    switch (tag) {
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE:
+        return node;
+    case TYPE_REF:
+        return *__typenode_get_rootptr(node);
+    default:
+        Py_UNREACHABLE();
+    }
 }
 
 /**
@@ -232,20 +335,22 @@ __typenode_get_rootptr(_Py_TYPENODE_t ref)
 static PyTypeObject*
 typenode_get_type(_Py_TYPENODE_t node)
 {
-    uintptr_t tag = _Py_TYPENODE_GET_TAG(node);
-    switch (tag) {
-    case TYPE_ROOT: {
-        PyTypeObject *ret = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(node);
-        return ret;
+    _Py_TYPENODE_t root = typenode_get_root(node);
+    if (_Py_TYPENODE_GET_TAG(root) == TYPE_ROOT_NEGATIVE) {
+        return NULL;
     }
-    case TYPE_REF: {
-        _Py_TYPENODE_t *root_ref = __typenode_get_rootptr(node);
-        PyTypeObject *ret = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(*root_ref);
-        return ret;
-    }
-    default:
-        Py_UNREACHABLE();
-    }
+    return (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(root);
+}
+
+/**
+ * @brief Check if a node's root is a negative type.
+ * @param node The node to check
+ * @return true if node root is negative false otherwise
+*/
+static inline bool
+typenode_root_is_negative(_Py_TYPENODE_t node)
+{
+    return _Py_TYPENODE_GET_TAG(typenode_get_root(node)) == TYPE_ROOT_NEGATIVE;
 }
 
 /**
@@ -286,7 +391,8 @@ typenode_get_location(_PyTier2TypeContext *ctx, _Py_TYPENODE_t *node, bool *is_l
  * @param y Node from the same type context as `x`
  * @return If `x` and `y` belong to the same tree in the type context
 */
-static bool typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
+static bool
+typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
 {
     _Py_TYPENODE_t *x_rootref = x;
     _Py_TYPENODE_t *y_rootref = y;
@@ -294,12 +400,14 @@ static bool typenode_is_same_tree(_Py_TYPENODE_t *x, _Py_TYPENODE_t *y)
     uintptr_t y_tag = _Py_TYPENODE_GET_TAG(*y);
     switch (y_tag) {
     case TYPE_REF: y_rootref = __typenode_get_rootptr(*y);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
     switch (x_tag) {
     case TYPE_REF: x_rootref = __typenode_get_rootptr(*x);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
     return x_rootref == y_rootref;
@@ -332,7 +440,7 @@ __type_propagate_TYPE_SET(
     //   - `src` has to be a TYPE_ROOT
     //   - `src` is to be interpreted as a _Py_TYPENODE_t
     if (src_is_new) {
-        assert(_Py_TYPENODE_GET_TAG((_Py_TYPENODE_t)src) == TYPE_ROOT);
+        assert(_Py_TYPENODE_IS_ROOT((_Py_TYPENODE_t)src));
     }
 #endif
 
@@ -344,7 +452,8 @@ __type_propagate_TYPE_SET(
     _Py_TYPENODE_t *rootref = dst;
     switch (tag) {
     case TYPE_REF: rootref = __typenode_get_rootptr(*dst);
-    case TYPE_ROOT:
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE:
         if (!src_is_new) {
             // Make dst a reference to src
             *rootref = _Py_TYPENODE_MAKE_REF((_Py_TYPENODE_t)src);
@@ -386,7 +495,7 @@ __type_propagate_TYPE_OVERWRITE(
 #ifdef Py_DEBUG
     // See: __type_propagate_TYPE_SET
     if (src_is_new) {
-        assert(_Py_TYPENODE_GET_TAG((_Py_TYPENODE_t)src) == TYPE_ROOT);
+        assert(_Py_TYPENODE_IS_ROOT((_Py_TYPENODE_t)src));
     }
 #endif
 
@@ -396,7 +505,8 @@ __type_propagate_TYPE_OVERWRITE(
 
     uintptr_t tag = _Py_TYPENODE_GET_TAG(*dst);
     switch (tag) {
-    case TYPE_ROOT: {
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: {
         
         _Py_TYPENODE_t old_dst = *dst;
         if (!src_is_new) {
@@ -606,8 +716,11 @@ print_typestack(const _PyTier2TypeContext *type_context)
     fprintf(stderr, "      Stack: %p: [", type_stack);
     for (int i = 0; i < nstack; i++) {
         _Py_TYPENODE_t node = type_stack[i];
-        PyTypeObject *type = typenode_get_type(node);
         _Py_TYPENODE_t tag = _Py_TYPENODE_GET_TAG(node);
+
+        _Py_TYPENODE_t type = typenode_get_root(node);
+
+        fprintf(stderr, "%s", i == nstack_use ? "." : " ");
 
         if (tag == TYPE_REF) {
             _Py_TYPENODE_t *parent = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(node));
@@ -619,9 +732,14 @@ print_typestack(const _PyTier2TypeContext *type_context)
             }
         }
 
-        fprintf(stderr, "%s%s",
-            i == nstack_use ? "." : " ",
-            type == NULL ? "?" : type->tp_name);
+        if (_Py_TYPENODE_GET_TAG(type) == TYPE_ROOT_NEGATIVE) {
+            fprintf(stderr, "NEG[%p]",
+                (void *)(type >> 2));
+        } else {
+            PyTypeObject *ptr = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(type);
+            fprintf(stderr, "%s",
+                ptr == NULL ? "?" : ptr->tp_name);
+        }
         if (tag == TYPE_REF) {
             fprintf(stderr, "%s%d]",
                 is_local ? "->locals[" : "->stack[",
@@ -633,8 +751,9 @@ print_typestack(const _PyTier2TypeContext *type_context)
     fprintf(stderr, "      Locals %p: [", type_locals);
     for (int i = 0; i < nlocals; i++) {
         _Py_TYPENODE_t node = type_locals[i];
-        PyTypeObject *type = typenode_get_type(node);
         _Py_TYPENODE_t tag = _Py_TYPENODE_GET_TAG(node);
+
+        _Py_TYPENODE_t type = typenode_get_root(node);
 
         if (tag == TYPE_REF) {
             _Py_TYPENODE_t *parent = (_Py_TYPENODE_t *)(_Py_TYPENODE_CLEAR_TAG(node));
@@ -646,8 +765,14 @@ print_typestack(const _PyTier2TypeContext *type_context)
             }
         }
 
-        fprintf(stderr, " %s",
-            type == NULL ? "?" : type->tp_name);
+        if (_Py_TYPENODE_GET_TAG(type) == TYPE_ROOT_NEGATIVE) {
+            fprintf(stderr, " NEG[%p]",
+                (void *)(type >> 2));
+        } else {
+            PyTypeObject *ptr = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(type);
+            fprintf(stderr, " %s",
+                ptr == NULL ? "?" : ptr->tp_name);
+        }
         if (tag == TYPE_REF) {
             fprintf(stderr, "%s%d]",
                 is_local ? "->locals[" : "->stack[",
@@ -681,7 +806,7 @@ type_propagate(
 #define TYPELOCALS_GET(idx)         (&(type_locals[idx]))
 
 // Get the type of the const and make into a TYPENODE ROOT
-#define TYPECONST_GET(idx)          _Py_TYPENODE_MAKE_ROOT( \
+#define TYPECONST_GET(idx)          _Py_TYPENODE_MAKE_ROOT_POSITIVE( \
                                         (_Py_TYPENODE_t)Py_TYPE( \
                                             PyTuple_GET_ITEM(consts, idx)))
 
@@ -1043,7 +1168,8 @@ rebox_stack(_Py_CODEUNIT *write_curr,
 {
     for (int i = 0; i < num_elements; i++) {
         _Py_TYPENODE_t *curr = type_context->type_stack_ptr - 1 - i;
-        if (typenode_get_type(*curr) == &PyRawFloat_Type) {
+        if (!typenode_root_is_negative(*curr) &&
+            typenode_get_type(*curr) == &PyRawFloat_Type) {
             write_curr->op.code = BOX_FLOAT;
             write_curr->op.arg = i;
             write_curr++;
@@ -1091,31 +1217,6 @@ write_bb_id(_PyBBBranchCache *cache, int bb_id, bool is_type_guard) {
     assert((bb_id & 0x8000) == 0);
     cache->bb_id_tagged = MAKE_TAGGED_BB_ID((uint16_t)bb_id, is_type_guard);
 }
-
-/**
- * @brief The order/hierarchy to emit type guards.
- *
- * NEED TO ADD TO THIS EVERY TIME WE ADD A NEW ONE.
-*/
-static int type_guard_ladder[256] = {
-    -1,
-    CHECK_FLOAT,
-    CHECK_INT,
-    -1,
-    CHECK_LIST,
-    -1,
-};
-
-/**
- * @brief Type guard to index in the ladder.
- *
- * KEEP IN SYNC WITH INDEX IN type_guard_ladder
-*/
-static int type_guard_to_index[256] = {
-    [CHECK_FLOAT] = 1,
-    [CHECK_INT] = 2,
-    [CHECK_LIST] = 4,
-};
 
 
 /**
@@ -1465,8 +1566,6 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, _PyTier2BBMetadata *meta,
  * @param t2_start Start of the current basic block.
  * @param oparg Oparg of the BINARY_OP.
  * @param needs_guard Signals to the caller whether they should emit a type guard.
- * @param prev_type_guard The previous basic block's ending type guard (this is
- * required for the ladder of types).
  * 
  * @param raw_op The tier 0/1 BINARY_OP.
  * @param write_curr Tier 2 instruction write buffer.
@@ -1479,100 +1578,98 @@ infer_BINARY_OP(
     _Py_CODEUNIT *t2_start,
     int oparg,
     bool *needs_guard,
-    _Py_CODEUNIT *prev_type_guard,
     _Py_CODEUNIT raw_op,
     _Py_CODEUNIT *write_curr,
     _PyTier2TypeContext *type_context,
     int bb_id)
 {
+#define END_GUARD ((1 << FLOAT_BITIDX) | (1 << LONG_BITIDX))
+
     assert(oparg == NB_ADD || oparg == NB_SUBTRACT || oparg == NB_MULTIPLY);
-    bool is_first_instr = (write_curr == t2_start);
     *needs_guard = false;
-    PyTypeObject *right = typenode_get_type(type_context->type_stack_ptr[-1]);
-    PyTypeObject *left = typenode_get_type(type_context->type_stack_ptr[-2]);
-    if (left == &PyLong_Type || right == &PyLong_Type) {
-        if (left == &PyLong_Type && right == &PyLong_Type) {
-            int opcode = oparg == NB_ADD
-                ? BINARY_OP_ADD_INT_REST
-                : oparg == NB_SUBTRACT
-                ? BINARY_OP_SUBTRACT_INT_REST
-                : oparg == NB_MULTIPLY
-                ? BINARY_OP_MULTIPLY_INT_REST
-                : (Py_UNREACHABLE(), 1);
-            write_curr->op.code = opcode;
-            write_curr++;
-            type_propagate(opcode, 0, type_context, NULL);
-            return write_curr;
-        }
-        // One is unknown
-        int other_oparg = right == NULL ? 0 : 1;
-        if (prev_type_guard != NULL &&
-            prev_type_guard->op.code == CHECK_INT &&
-            prev_type_guard->op.arg != other_oparg &&
-            (right == NULL || left == NULL)) {
-            *needs_guard = true;
-            return emit_type_guard(write_curr, CHECK_INT, other_oparg, bb_id);
-        }
-    }
-    // One of them are floats
-    if ((left == &PyRawFloat_Type || left == &PyFloat_Type) ||
-        (right == &PyRawFloat_Type || right == &PyFloat_Type)) {
-        // Both side float, emit the optimised addition instruction
-        if ((left == &PyRawFloat_Type || left == &PyFloat_Type) &&
-            (right == &PyRawFloat_Type || right == &PyFloat_Type)) {
-            int opcode = oparg == NB_ADD
-                ? BINARY_OP_ADD_FLOAT_UNBOXED
-                : oparg == NB_SUBTRACT
-                ? BINARY_OP_SUBTRACT_FLOAT_UNBOXED
-                : oparg == NB_MULTIPLY
-                ? BINARY_OP_MULTIPLY_FLOAT_UNBOXED
-                : (Py_UNREACHABLE(), 1);
-            if (right == &PyFloat_Type) {
-                write_curr->op.code = UNBOX_FLOAT;
-                write_curr->op.arg = 0;
-                write_curr++;
-                type_propagate(UNBOX_FLOAT, 0, type_context, NULL);
-            }
-            if (left == &PyFloat_Type) {
-                write_curr->op.code = UNBOX_FLOAT;
-                write_curr->op.arg = 1;
-                write_curr++;
-                type_propagate(UNBOX_FLOAT, 1, type_context, NULL);
-            }
-            write_curr->op.code = opcode;
-            write_curr++;
-            type_propagate(opcode, 0, type_context, NULL);
-            return write_curr;
-        }
-        // One is unknown
-        int other_oparg = right == NULL ? 0 : 1;
-        if (prev_type_guard != NULL &&
-            prev_type_guard->op.code == CHECK_FLOAT &&
-            prev_type_guard->op.arg != other_oparg &&
-            (right == NULL || left == NULL)) {
-            *needs_guard = true;
-            return emit_type_guard(write_curr, CHECK_FLOAT, right == NULL ? 0 : 1, bb_id);
-        }
-    }
-    // Both unknown, time to emit the chain of guards.
-    // No type guard before this, or it's not the first in the new BB.
-    // First in new BB usually indicates it's already part of a pre-existing ladder.
-    if (prev_type_guard == NULL || !is_first_instr) {
-        write_curr = rebox_stack(write_curr, type_context, 2);
+    _Py_TYPENODE_t rightroot = typenode_get_root(type_context->type_stack_ptr[-1]);
+    _Py_TYPENODE_t leftroot = typenode_get_root(type_context->type_stack_ptr[-2]);
+
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(rightroot)) {
         *needs_guard = true;
-        return emit_type_guard(write_curr, CHECK_FLOAT, 0, bb_id);
+        write_curr = emit_type_guard(write_curr, CHECK_FLOAT, 0, bb_id);
+        return write_curr;
     }
-    else {
-        int next_guard = type_guard_ladder[
-            type_guard_to_index[prev_type_guard->op.code] + 1];
-        if (next_guard != -1) {
-            write_curr = rebox_stack(write_curr, type_context, 2);
-            *needs_guard = true;
-            return emit_type_guard(write_curr, next_guard, 0, bb_id);
-        }
-        // End of ladder, fall through
+    if (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
+        && ((_Py_TYPENODE_CLEAR_TAG(rightroot) & END_GUARD) == END_GUARD)) {
+        return NULL;
     }
+    if (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
+        && root_has_negativetype(rightroot, &PyFloat_Type)) {
+        *needs_guard = true;
+        write_curr = emit_type_guard(write_curr, CHECK_INT, 0, bb_id);
+        return write_curr;
+    }
+    // rightroot is now guaranteed to be FLOAT or INT or positive type
+    PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
+
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)
+        && (righttype == &PyLong_Type
+            || righttype == &PyFloat_Type || righttype == &PyRawFloat_Type)) {
+        // Check if same type as right
+        *needs_guard = true;
+        write_curr = emit_type_guard(write_curr,
+            righttype == &PyLong_Type ? CHECK_INT : CHECK_FLOAT, 1, bb_id);
+        return write_curr;
+    }
+    if (_Py_TYPENODE_GET_TAG(leftroot) == TYPE_ROOT_NEGATIVE) {
+        return NULL;
+    }
+
+    // leftroot is now guaranteed to be the same type as rightroot or a positive type
+    PyTypeObject *lefttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(leftroot);
+
+    if (righttype == &PyFloat_Type && (lefttype == &PyFloat_Type || lefttype == &PyRawFloat_Type)) {
+        write_curr->op.code = UNBOX_FLOAT;
+        write_curr->op.arg = 0;
+        write_curr++;
+        type_propagate(UNBOX_FLOAT, 0, type_context, NULL);
+        rightroot = typenode_get_root(type_context->type_stack_ptr[-1]);
+        righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
+    }
+    if (lefttype == &PyFloat_Type) {
+        write_curr->op.code = UNBOX_FLOAT;
+        write_curr->op.arg = 1;
+        write_curr++;
+        type_propagate(UNBOX_FLOAT, 1, type_context, NULL);
+        leftroot = typenode_get_root(type_context->type_stack_ptr[-2]);
+        lefttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(leftroot);
+    }
+
+    if (righttype == &PyRawFloat_Type && lefttype == &PyRawFloat_Type) {
+        int opcode = oparg == NB_ADD
+            ? BINARY_OP_ADD_FLOAT_UNBOXED
+            : oparg == NB_SUBTRACT
+            ? BINARY_OP_SUBTRACT_FLOAT_UNBOXED
+            : oparg == NB_MULTIPLY
+            ? BINARY_OP_MULTIPLY_FLOAT_UNBOXED
+            : (Py_UNREACHABLE(), 1);
+        write_curr->op.code = opcode;
+        write_curr++;
+        type_propagate(opcode, 0, type_context, NULL);
+        return write_curr;
+    }
+    if (righttype == &PyLong_Type && lefttype == &PyLong_Type) {
+        int opcode = oparg == NB_ADD
+            ? BINARY_OP_ADD_INT_REST
+            : oparg == NB_SUBTRACT
+            ? BINARY_OP_SUBTRACT_INT_REST
+            : oparg == NB_MULTIPLY
+            ? BINARY_OP_MULTIPLY_INT_REST
+            : (Py_UNREACHABLE(), 1);
+        write_curr->op.code = opcode;
+        write_curr++;
+        type_propagate(opcode, 0, type_context, NULL);
+        return write_curr;
+    }
+
     return NULL;
+#undef END_GUARD
 }
 
 /**
@@ -1582,8 +1679,6 @@ infer_BINARY_OP(
  * @param t2_start Start of the current basic block.
  * @param oparg Oparg of the BINARY_OP.
  * @param needs_guard Signals to the caller whether they should emit a type guard.
- * @param prev_type_guard The previous basic block's ending type guard (this is
- * required for the ladder of types).
  *
  * @param raw_op The tier 0/1 BINARY_OP.
  * @param write_curr Tier 2 instruction write buffer.
@@ -1598,56 +1693,55 @@ infer_BINARY_SUBSCR(
     _Py_CODEUNIT *t2_start,
     int oparg,
     bool *needs_guard,
-    _Py_CODEUNIT *prev_type_guard,
     _Py_CODEUNIT raw_op,
     _Py_CODEUNIT *write_curr,
     _PyTier2TypeContext *type_context,
     int bb_id,
     bool store)
 {
-    assert(oparg == NB_ADD || oparg == NB_SUBTRACT || oparg == NB_MULTIPLY);
-    bool is_first_instr = (write_curr == t2_start);
-    *needs_guard = false;
-    PyTypeObject *sub = typenode_get_type(type_context->type_stack_ptr[-1]);
-    PyTypeObject *container = typenode_get_type(type_context->type_stack_ptr[-2]);
-    if (container == &PyList_Type) {
-        if (sub == &PySmallInt_Type) {
-            if (store) {
-                int opcode = STORE_SUBSCR_LIST_INT_REST;
-                write_curr = emit_i(write_curr, opcode, oparg);
-                write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_STORE_SUBSCR);
-                type_propagate(opcode, oparg, type_context, NULL);
-                return write_curr;
-            }
-            else {
-                int opcode = BINARY_SUBSCR_LIST_INT_REST;
-                write_curr = emit_i(write_curr, opcode, oparg);
-                write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_BINARY_SUBSCR);
-                type_propagate(opcode, oparg, type_context, NULL);
-                return write_curr;
-            }
+#define END_GUARD ((1 << LIST_BITIDX))
 
-        }
+    *needs_guard = false;
+    _Py_TYPENODE_t sub_root = typenode_get_root(type_context->type_stack_ptr[-1]);
+    _Py_TYPENODE_t container_root = typenode_get_root(type_context->type_stack_ptr[-2]);
+    uintptr_t container_tag = _Py_TYPENODE_GET_TAG(container_root);
+
+    if (typenode_get_type(sub_root) != &PySmallInt_Type) {
+        return NULL;
     }
-    // Unknown, time to emit the chain of guards.
-    // No type guard before this, or it's not the first in the new BB.
-    // First in new BB usually indicates it's already part of a pre-existing ladder.
-    if (prev_type_guard == NULL || !is_first_instr) {
-        write_curr = rebox_stack(write_curr, type_context, 2);
+    // sub_type guaranteed to be &PySmallInt_Type
+    PyTypeObject *sub_type = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(sub_root);
+
+    if ((container_tag == TYPE_ROOT_NEGATIVE
+        && (_Py_TYPENODE_CLEAR_TAG(container_root) & END_GUARD) == END_GUARD)) {
+        return NULL;
+    }
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(container_root)
+        || (container_tag == TYPE_ROOT_NEGATIVE &&
+            !root_has_negativetype(container_root, &PyList_Type))) {
         *needs_guard = true;
         return emit_type_guard(write_curr, CHECK_LIST, 1, bb_id);
     }
-    else {
-        int next_guard = type_guard_ladder[
-            type_guard_to_index[prev_type_guard->op.code] + 1];
-        if (next_guard != -1) {
-            write_curr = rebox_stack(write_curr, type_context, store ? 3 : 2);
-            *needs_guard = true;
-            return emit_type_guard(write_curr, next_guard, 1, bb_id);
+    PyTypeObject *container_type = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(container_root);
+
+    if (container_type == &PyList_Type) {
+        if (store) {
+            int opcode = STORE_SUBSCR_LIST_INT_REST;
+            write_curr = emit_i(write_curr, opcode, oparg);
+            write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_STORE_SUBSCR);
+            type_propagate(opcode, oparg, type_context, NULL);
+            return write_curr;
         }
-        // End of ladder, fall through
+        else {
+            int opcode = BINARY_SUBSCR_LIST_INT_REST;
+            write_curr = emit_i(write_curr, opcode, oparg);
+            write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_BINARY_SUBSCR);
+            type_propagate(opcode, oparg, type_context, NULL);
+            return write_curr;
+        }
     }
     return NULL;
+#undef END_GUARD
 }
 
 /**
@@ -1659,6 +1753,17 @@ static inline bool
 is_unboxed_type(PyTypeObject *t)
 {
     return t == &PyRawFloat_Type;
+}
+
+/**
+ * @brief Whether the type node points to an unboxed type.
+ * @param t The node to check
+ * @return Yes/No.
+*/
+static inline bool
+is_unboxed_typenode(_Py_TYPENODE_t t)
+{
+    return !typenode_root_is_negative(t) && is_unboxed_type(typenode_get_type(t));
 }
 
 
@@ -1675,7 +1780,6 @@ is_unboxed_type(PyTypeObject *t)
  * 
  * @param co The code object we're optimizing.
  * @param bb_space The BB space of the code object to write to.
- * @param prev_type_guard The type guard that ended the previous basic block (if present).
  * @param tier1_start The tier 1 instructions to start referring from.
  * @param starting_type_context The starting type context for this new basic block.
  * @return A new tier 2 basic block.
@@ -1684,18 +1788,11 @@ _PyTier2BBMetadata *
 _PyTier2_Code_DetectAndEmitBB(
     PyCodeObject *co,
     _PyTier2BBSpace *bb_space,
-    _Py_CODEUNIT *prev_type_guard,
     _Py_CODEUNIT *tier1_start,
     // starting_type_context will be modified in this function,
     // do make a copy if needed before calling this function
     _PyTier2TypeContext *starting_type_context)
 {
-    assert(
-        prev_type_guard == NULL ||
-        prev_type_guard->op.code == CHECK_INT ||
-        prev_type_guard->op.code == CHECK_FLOAT ||
-        prev_type_guard->op.code == CHECK_LIST
-    );
 #define END() goto end;
 #define JUMPBY(x) i += x;
 #define DISPATCH()        write_i = emit_i(write_i, specop, curr->op.arg); \
@@ -1769,9 +1866,8 @@ _PyTier2_Code_DetectAndEmitBB(
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t **type_stackptr = &starting_type_context->type_stack_ptr;
-            PyTypeObject *pop = typenode_get_type(*TYPESTACK_PEEK(1));
             // Writing unboxed val to a boxed val. 
-            if (is_unboxed_type(pop)) {
+            if (is_unboxed_typenode(*TYPESTACK_PEEK(1))) {
                 opcode = specop = POP_TOP_NO_DECREF;
             }
             DISPATCH();
@@ -1780,9 +1876,8 @@ _PyTier2_Code_DetectAndEmitBB(
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t **type_stackptr = &starting_type_context->type_stack_ptr;
-            PyTypeObject *pop = typenode_get_type(*TYPESTACK_PEEK(1 + (oparg - 1)));
             // Writing unboxed val to a boxed val. 
-            if (is_unboxed_type(pop)) {
+            if (is_unboxed_typenode(*TYPESTACK_PEEK(1 + (oparg - 1)))) {
                 opcode = specop = COPY_NO_INCREF;
             }
             DISPATCH();
@@ -1808,7 +1903,7 @@ _PyTier2_Code_DetectAndEmitBB(
                     _PyTier2TypeContext *type_context = starting_type_context;
                     _Py_TYPENODE_t **type_stackptr = &type_context->type_stack_ptr;
                     *type_stackptr += 1;
-                    TYPE_OVERWRITE((_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT((_Py_TYPENODE_t)&PySmallInt_Type), TYPESTACK_PEEK(1), true);
+                    TYPE_OVERWRITE((_Py_TYPENODE_t *)_Py_TYPENODE_MAKE_ROOT_POSITIVE((_Py_TYPENODE_t)&PySmallInt_Type), TYPESTACK_PEEK(1), true);
                     continue;
                 }
             }
@@ -1818,13 +1913,13 @@ _PyTier2_Code_DetectAndEmitBB(
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t *type_locals = starting_type_context->type_locals;
+            _Py_TYPENODE_t local = *TYPELOCALS_GET(oparg);
             // Writing unboxed val to a boxed val.
-            PyTypeObject *local = typenode_get_type(*TYPELOCALS_GET(oparg));
-            if (is_unboxed_type(local)) {
+            if (is_unboxed_typenode(local)) {
                 opcode = specop = LOAD_FAST_NO_INCREF;
             }
             else {
-                if (local == &PyFloat_Type) {
+                if (!typenode_root_is_negative(local) && typenode_get_type(local) == &PyFloat_Type) {
                     write_i = emit_i(write_i, LOAD_FAST, oparg);
                     type_propagate(LOAD_FAST,
                         oparg, starting_type_context, consts);
@@ -1847,12 +1942,12 @@ _PyTier2_Code_DetectAndEmitBB(
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t *type_locals = starting_type_context->type_locals;
             // Writing unboxed val to a boxed val.
-            PyTypeObject *local = typenode_get_type(*TYPELOCALS_GET(oparg));
-            if (is_unboxed_type(local)) {
+            _Py_TYPENODE_t local = *TYPELOCALS_GET(oparg);
+            if (is_unboxed_typenode(local)) {
                 opcode = specop = LOAD_FAST_NO_INCREF;
             }
             else {
-                if (local == &PyFloat_Type) {
+                if (!typenode_root_is_negative(local) && typenode_get_type(local) == &PyFloat_Type) {
                     write_i = emit_i(write_i, LOAD_FAST, oparg);
                     type_propagate(LOAD_FAST,
                         oparg, starting_type_context, consts);
@@ -1875,11 +1970,11 @@ _PyTier2_Code_DetectAndEmitBB(
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t *type_locals = starting_type_context->type_locals;
             _Py_TYPENODE_t **type_stackptr = &starting_type_context->type_stack_ptr;
-            PyTypeObject *local = typenode_get_type(*TYPESTACK_PEEK(1));
-            PyTypeObject *store = typenode_get_type(*TYPELOCALS_GET(oparg));
+            _Py_TYPENODE_t local = *TYPESTACK_PEEK(1);
+            _Py_TYPENODE_t store = *TYPELOCALS_GET(oparg);
             // Writing unboxed val to a boxed val. 
-            if (is_unboxed_type(local)) {
-                if (!is_unboxed_type(store)) {
+            if (is_unboxed_typenode(local)) {
+                if (!is_unboxed_typenode(store)) {
                     opcode = specop = STORE_FAST_UNBOXED_BOXED;
                 }
                 else {
@@ -1887,7 +1982,7 @@ _PyTier2_Code_DetectAndEmitBB(
                 }
             }
             else {
-                if (is_unboxed_type(store)) {
+                if (is_unboxed_typenode(store)) {
                     opcode = specop = STORE_FAST_BOXED_UNBOXED;
                 }
                 else {
@@ -1909,7 +2004,6 @@ _PyTier2_Code_DetectAndEmitBB(
                 // Add operation. Need to check if we can infer types.
                 _Py_CODEUNIT *possible_next = infer_BINARY_OP(t2_start,
                     oparg, &needs_guard,
-                    prev_type_guard,
                     *curr,
                     write_i, starting_type_context,
                     co->_tier2_info->bb_data_curr);
@@ -1931,7 +2025,6 @@ _PyTier2_Code_DetectAndEmitBB(
         case BINARY_SUBSCR: {
             _Py_CODEUNIT *possible_next = infer_BINARY_SUBSCR(
                 t2_start, oparg, &needs_guard,
-                prev_type_guard,
                 *curr,
                 write_i, starting_type_context,
                 co->_tier2_info->bb_data_curr, false);
@@ -1952,7 +2045,6 @@ _PyTier2_Code_DetectAndEmitBB(
         case STORE_SUBSCR: {
             _Py_CODEUNIT *possible_next = infer_BINARY_SUBSCR(
                 t2_start, oparg, &needs_guard,
-                prev_type_guard,
                 *curr,
                 write_i, starting_type_context,
                 co->_tier2_info->bb_data_curr, true);
@@ -2448,7 +2540,7 @@ _PyCode_Tier2Initialize(_PyInterpreterFrame *frame, _Py_CODEUNIT *next_instr)
         goto cleanup;
     }
     _PyTier2BBMetadata *meta = _PyTier2_Code_DetectAndEmitBB(
-        co, bb_space, NULL,
+        co, bb_space,
         _PyCode_CODE(co), type_context);
     if (meta == NULL) {
         _PyTier2TypeContext_Free(type_context);
@@ -2560,19 +2652,39 @@ _PyTier2_GenerateNextBBMetaWithTypeContext(
     // BB_BRANCH
     _Py_CODEUNIT *prev_type_guard = BB_IS_TYPE_BRANCH(bb_id_tagged)
         ? curr_executing_instr - 2 : NULL;
-    if (BB_TEST_IS_SUCCESSOR(bb_flag) && prev_type_guard != NULL) {
-        // Propagate the type guard information.
+    if (prev_type_guard != NULL) {
 #if TYPEPROP_DEBUG && defined(Py_DEBUG)
         fprintf(stderr,
             "  [-] Previous predicate BB ended with a type guard: %s\n",
             _PyOpcode_OpName[prev_type_guard->op.code]);
 #endif
-        type_propagate(prev_type_guard->op.code,
-            prev_type_guard->op.arg, type_context_copy, NULL);
+        // Propagate the type guard information.
+        uint8_t guard_opcode = prev_type_guard->op.code;
+        if (BB_TEST_IS_SUCCESSOR(bb_flag)) {
+            type_propagate(guard_opcode,
+                prev_type_guard->op.arg, type_context_copy, NULL);
+        }
+        else {
+            _Py_TYPENODE_t *dst = &(type_context_copy->type_stack_ptr[-1 - prev_type_guard->op.arg]);
+            _Py_TYPENODE_t dstroot = typenode_get_root(*dst);
+            // Check if we are removing any type information.
+            assert(
+                _Py_TYPENODE_GET_TAG(dstroot) == TYPE_ROOT_NEGATIVE
+                || _Py_TYPENODE_IS_POSITIVE_NULL(dstroot));
+            _Py_TYPENODE_t src = set_negativetype(
+                _Py_TYPENODE_IS_POSITIVE_NULL(dstroot)
+                    ? _Py_TYPENODE_MAKE_ROOT_NEGATIVE(0)
+                    : dstroot,
+                guardopcode_to_typeobject(guard_opcode));
+            TYPE_SET((_Py_TYPENODE_t *)src, dst, true);
+#if TYPEPROP_DEBUG && defined(Py_DEBUG)
+            fprintf(stderr,"  [+] Guard failure. Type context:\n");
+            print_typestack(type_context_copy);
+#endif
+        }
     }
     _PyTier2BBMetadata *metadata = _PyTier2_Code_DetectAndEmitBB(
         frame->f_code, space,
-        prev_type_guard,
         tier1_end,
         type_context_copy);
     if (metadata == NULL) {
@@ -2681,12 +2793,14 @@ typenode_is_compatible(
     _Py_TYPENODE_t *root2 = ctx2_node;
     switch (_Py_TYPENODE_GET_TAG(*ctx1_node)) {
     case TYPE_REF: root1 = __typenode_get_rootptr(*ctx1_node);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
     switch (_Py_TYPENODE_GET_TAG(*ctx2_node)) {
     case TYPE_REF: root2 = __typenode_get_rootptr(*ctx2_node);
-    case TYPE_ROOT: break;
+    case TYPE_ROOT_POSITIVE:
+    case TYPE_ROOT_NEGATIVE: break;
     default: Py_UNREACHABLE();
     }
 
