@@ -9,8 +9,8 @@
 
 #include "opcode.h"
 
-#define BB_DEBUG 1
-#define TYPEPROP_DEBUG 1
+#define BB_DEBUG 0
+#define TYPEPROP_DEBUG 0
 // Max typed version basic blocks per basic block
 #define MAX_BB_VERSIONS 10
 
@@ -1572,7 +1572,8 @@ infer_BINARY_OP(
     PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
 
     if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)
-        && (righttype == &PyLong_Type || righttype == &PyFloat_Type || righttype == &PyRawFloat_Type)) {
+        && (righttype == &PyLong_Type
+            || righttype == &PyFloat_Type || righttype == &PyRawFloat_Type)) {
         // Check if same type as right
         *needs_guard = true;
         write_curr = emit_type_guard(write_curr,
@@ -1662,22 +1663,31 @@ infer_BINARY_SUBSCR(
     bool store)
 {
 #define END_GUARD ((1 << LIST_BITIDX))
+
     *needs_guard = false;
     _Py_TYPENODE_t sub_root = typenode_get_root(type_context->type_stack_ptr[-1]);
     _Py_TYPENODE_t container_root = typenode_get_root(type_context->type_stack_ptr[-2]);
-    if ((_Py_TYPENODE_GET_TAG(container_root) == TYPE_ROOT_NEGATIVE
-        && _Py_TYPENODE_CLEAR_TAG(container_root) == END_GUARD)
-        || typenode_get_type(sub_root) != &PySmallInt_Type) {
+    uintptr_t container_tag = _Py_TYPENODE_GET_TAG(container_root);
+
+    if (typenode_get_type(sub_root) != &PySmallInt_Type) {
         return NULL;
     }
-    if (_Py_TYPENODE_IS_POSITIVE_NULL(container_root) || !has_negativetype(container_root, &PyList_Type)) {
+    // sub_type guaranteed to be &PySmallInt_Type
+    PyTypeObject *sub_type = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(sub_root);
+
+    if ((container_tag == TYPE_ROOT_NEGATIVE
+        && (_Py_TYPENODE_CLEAR_TAG(container_root) & END_GUARD) == END_GUARD)) {
+        return NULL;
+    }
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(container_root)
+        || (container_tag == TYPE_ROOT_NEGATIVE &&
+            !has_negativetype(container_root, &PyList_Type))) {
         *needs_guard = true;
         return emit_type_guard(write_curr, CHECK_LIST, 1, bb_id);
     }
-    PyTypeObject *sub_type = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(sub_root);
     PyTypeObject *container_type = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(container_root);
 
-    if (container_type == &PyList_Type && sub_type == &PySmallInt_Type) {
+    if (container_type == &PyList_Type) {
         if (store) {
             int opcode = STORE_SUBSCR_LIST_INT_REST;
             write_curr = emit_i(write_curr, opcode, oparg);
@@ -1693,52 +1703,7 @@ infer_BINARY_SUBSCR(
             return write_curr;
         }
     }
-    return NULL; // TODO
-/*
-    assert(oparg == NB_ADD || oparg == NB_SUBTRACT || oparg == NB_MULTIPLY);
-    bool is_first_instr = (write_curr == t2_start);
-    *needs_guard = false;
-    PyTypeObject *sub = typenode_get_type(type_context->type_stack_ptr[-1]);
-    PyTypeObject *container = typenode_get_type(type_context->type_stack_ptr[-2]);
-    if (container == &PyList_Type) {
-        if (sub == &PySmallInt_Type) {
-            if (store) {
-                int opcode = STORE_SUBSCR_LIST_INT_REST;
-                write_curr = emit_i(write_curr, opcode, oparg);
-                write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_STORE_SUBSCR);
-                type_propagate(opcode, oparg, type_context, NULL);
-                return write_curr;
-            }
-            else {
-                int opcode = BINARY_SUBSCR_LIST_INT_REST;
-                write_curr = emit_i(write_curr, opcode, oparg);
-                write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_BINARY_SUBSCR);
-                type_propagate(opcode, oparg, type_context, NULL);
-                return write_curr;
-            }
-
-        }
-    }
-    // Unknown, time to emit the chain of guards.
-    // No type guard before this, or it's not the first in the new BB.
-    // First in new BB usually indicates it's already part of a pre-existing ladder.
-    if (prev_type_guard == NULL || !is_first_instr) {
-        write_curr = rebox_stack(write_curr, type_context, 2);
-        *needs_guard = true;
-        return emit_type_guard(write_curr, CHECK_LIST, 1, bb_id);
-    }
-    else {
-        int next_guard = type_guard_ladder[
-            type_guard_to_index[prev_type_guard->op.code] + 1];
-        if (next_guard != -1) {
-            write_curr = rebox_stack(write_curr, type_context, store ? 3 : 2);
-            *needs_guard = true;
-            return emit_type_guard(write_curr, next_guard, 1, bb_id);
-        }
-        // End of ladder, fall through
-    }
     return NULL;
-*/
 #undef END_GUARD
 }
 
