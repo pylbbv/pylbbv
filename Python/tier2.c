@@ -1559,31 +1559,30 @@ infer_BINARY_OP(
         write_curr = emit_type_guard(write_curr, CHECK_FLOAT, 0, bb_id);
         return write_curr;
     }
+    if (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
+        && _Py_TYPENODE_CLEAR_TAG(rightroot) == END_GUARD) {
+        return NULL;
+    }
     if (has_negativetype(rightroot, &PyFloat_Type)) {
         *needs_guard = true;
         write_curr = emit_type_guard(write_curr, CHECK_INT, 0, bb_id);
         return write_curr;
     }
-    if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)) {
-        *needs_guard = true;
-        write_curr = emit_type_guard(write_curr, CHECK_FLOAT, 1, bb_id);
-        return write_curr;
-    }
-    if (has_negativetype(leftroot, &PyFloat_Type)) {
-        *needs_guard = true;
-        write_curr = emit_type_guard(write_curr, CHECK_INT, 1, bb_id);
-        return write_curr;
-    }
+    // rightroot is now guaranteed to be FLOAT or INT or positive type
+    PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
 
-    if ((_Py_TYPENODE_GET_TAG(leftroot) == TYPE_ROOT_NEGATIVE
-        && _Py_TYPENODE_CLEAR_TAG(leftroot) == END_GUARD)
-        || (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
-            && _Py_TYPENODE_CLEAR_TAG(rightroot) == END_GUARD)) {
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)) {
+        // Check if same type as right
+        *needs_guard = true;
+        write_curr = emit_type_guard(write_curr,
+            righttype == &PyFloat_Type ? CHECK_FLOAT : CHECK_INT, 1, bb_id);
+        return write_curr;
+    }
+    if (_Py_TYPENODE_GET_TAG(leftroot) == TYPE_ROOT_NEGATIVE) {
         return NULL;
     }
 
-
-    PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
+    // leftroot is now guaranteed to be the same type as rightroot or a positive type
     PyTypeObject *lefttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(leftroot);
 
     if (righttype == &PyFloat_Type && (lefttype == &PyFloat_Type || lefttype == &PyRawFloat_Type)) {
@@ -2670,7 +2669,9 @@ _PyTier2_GenerateNextBBMetaWithTypeContext(
                 _Py_TYPENODE_GET_TAG(dstroot) == TYPE_ROOT_NEGATIVE
                 || _Py_TYPENODE_IS_POSITIVE_NULL(dstroot));
             _Py_TYPENODE_t src = set_negativetype(
-                _Py_TYPENODE_MAKE_ROOT_NEGATIVE(0),
+                _Py_TYPENODE_IS_POSITIVE_NULL(dstroot)
+                    ? _Py_TYPENODE_MAKE_ROOT_NEGATIVE(0)
+                    : dstroot,
                 guardopcode_to_typeobject(guard_opcode));
             TYPE_SET((_Py_TYPENODE_t *)src, dst, true);
 #if TYPEPROP_DEBUG && defined(Py_DEBUG)
