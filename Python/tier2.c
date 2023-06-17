@@ -1670,7 +1670,7 @@ infer_BINARY_SUBSCR(
         || typenode_get_type(sub_root) != &PySmallInt_Type) {
         return NULL;
     }
-    if (_Py_TYPENODE_IS_POSITIVE_NULL(container_root)) {
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(container_root) || !has_negativetype(container_root, &PyList_Type)) {
         *needs_guard = true;
         return emit_type_guard(write_curr, CHECK_LIST, 1, bb_id);
     }
