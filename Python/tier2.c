@@ -1560,7 +1560,7 @@ infer_BINARY_OP(
         return write_curr;
     }
     if (_Py_TYPENODE_GET_TAG(rightroot) == TYPE_ROOT_NEGATIVE
-        && _Py_TYPENODE_CLEAR_TAG(rightroot) == END_GUARD) {
+        && ((_Py_TYPENODE_CLEAR_TAG(rightroot) & END_GUARD) == END_GUARD)) {
         return NULL;
     }
     if (has_negativetype(rightroot, &PyFloat_Type)) {
@@ -1571,11 +1571,12 @@ infer_BINARY_OP(
     // rightroot is now guaranteed to be FLOAT or INT or positive type
     PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
 
-    if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)) {
+    if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)
+        && (righttype == &PyLong_Type || righttype == &PyFloat_Type || righttype == &PyRawFloat_Type)) {
         // Check if same type as right
         *needs_guard = true;
         write_curr = emit_type_guard(write_curr,
-            righttype == &PyFloat_Type ? CHECK_FLOAT : CHECK_INT, 1, bb_id);
+            righttype == &PyLong_Type ? CHECK_INT : CHECK_FLOAT, 1, bb_id);
         return write_curr;
     }
     if (_Py_TYPENODE_GET_TAG(leftroot) == TYPE_ROOT_NEGATIVE) {
