@@ -553,9 +553,6 @@ with TestInfo("tier 2 specialisation in inner call"):
 
     # As long as it doesn't crash, everything's good.
 
-######################################################################
-# Tests for: Tier 2 specialisation in inner call                     #
-######################################################################
 with TestInfo("multiple jump targets in a single BB"):
     # See https://github.com/pylbbv/pylbbv/issues/38 for more information.
     def f(x, items):
