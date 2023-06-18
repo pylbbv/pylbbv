@@ -1443,6 +1443,7 @@ emit_scope_exit(_Py_CODEUNIT *write_curr, _Py_CODEUNIT exit,
 static inline _Py_CODEUNIT *
 emit_i(_Py_CODEUNIT *write_curr, int opcode, int oparg)
 {
+    assert(opcode != JUMP_FORWARD);
     if (oparg > 0xFF) {
         _py_set_opcode(write_curr, EXTENDED_ARG);
         write_curr->op.arg = (oparg >> 8) & 0xFF;
@@ -1858,9 +1859,14 @@ _PyTier2_Code_DetectAndEmitBB(
         case END_FOR:
             // Assert that we are the start of a BB
             assert(t2_start == write_i);
-            // Though we want to emit this, we don't want to start execution from END_FOR.
-            // So we tell the BB to skip over it.
-            t2_start++;
+
+            if (_PyOpcode_Deopt[(curr - 1)->op.code] == JUMP_BACKWARD) {
+                // If this follows a JUMP_BACKWARDS,
+                // Though we want to emit this, we don't want to start execution from END_FOR.
+                // So we tell the BB to skip over it.
+                t2_start++;
+            }
+            // Else, we do want to execute this.
             DISPATCH();
         case POP_TOP: {
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
@@ -2108,7 +2114,9 @@ _PyTier2_Code_DetectAndEmitBB(
                 if (type_context_copy == NULL) {
                     return NULL;
                 }
-                meta = _PyTier2_AllocateBBMetaData(co,
+                // We can't unconditionally overwrite the first bb
+                // because we might have multiple jump targets in a single BB.
+                meta = meta != NULL ? meta : _PyTier2_AllocateBBMetaData(co,
                     t2_start, _PyCode_CODE(co) + i, type_context_copy);
                 if (meta == NULL) {
                     _PyTier2TypeContext_Free(type_context_copy);
@@ -3008,9 +3016,12 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
 #endif
     for (int i = 0; i < t2_info->backward_jump_count; i++) {
 #if BB_DEBUG
-        fprintf(stderr, "jump offset checked: %d\n", t2_info->backward_jump_offsets[i]);
+        fprintf(stderr, "jump offset considered: %d\n", t2_info->backward_jump_offsets[i]);
 #endif
         if (t2_info->backward_jump_offsets[i] == jump_offset) {
+#if BB_DEBUG
+            fprintf(stderr, "jump offset matched: %d\n", t2_info->backward_jump_offsets[i]);
+#endif
             jump_offset_id = i;
             for (int x = 0; x < MAX_BB_VERSIONS; x++) {
                 int target_bb_id = t2_info->backward_jump_target_bb_pairs[i][x].id;
@@ -3150,12 +3161,14 @@ _PyTier2_RewriteForwardJump(_Py_CODEUNIT *bb_branch, _Py_CODEUNIT *target)
  * EXTENDED_ARG/NOP
  * BB_JUMP_BACKWARD_LAZY
  * CACHE
+ * CACHE
  * 
  * After:
  * 
  * EXTENDED_ARG (if needed, else NOP)
  * JUMP_BACKWARD_QUICK
  * END_FOR
+ * NOP
  * 
  * @param jump_backward_lazy The backwards jump instruction.
  * @param target The target we're jumping to.
@@ -3197,6 +3210,8 @@ _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *tar
     write_curr->op.arg = oparg & 0xFF;
     write_curr++;
     _py_set_opcode(write_curr, END_FOR);
+    write_curr++;
+    write_curr->op.code = NOP;
     write_curr++;
     return;
 }
