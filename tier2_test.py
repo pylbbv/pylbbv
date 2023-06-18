@@ -39,7 +39,7 @@ def writeinst(opc:str, arg:int=0):
 
     return bytes(inst)
 
-
+print("General feature tests...")
 ################################################
 # Type prop tests: TYPE_SET and TYPE_OVERWRITE #
 ################################################
@@ -446,6 +446,9 @@ with TestInfo("BB_TEST_ITER specialisation"):
     assert jmp_target.opname == "NOP" # Space for an EXTENDED_ARG
     assert insts[instidx + 1].opname == "BB_TEST_ITER_TUPLE" # The loop predicate
 
+print("General feature tests...Done!")
+
+print("Regression tests...")
 ######################################################################
 # Tests for: Tier 2 backward jump type context compatiblity check    #
 ######################################################################
@@ -549,5 +552,27 @@ with TestInfo("tier 2 specialisation in inner call"):
     f(3)
 
     # As long as it doesn't crash, everything's good.
+
+with TestInfo("multiple jump targets in a single BB"):
+    # See https://github.com/pylbbv/pylbbv/issues/38 for more information.
+    def f(x, items):
+        if x == 0: # Trigger tier2 generation
+            return x+x 
+        ret = "uwu"
+        while True:
+            for item in items:
+                if item: break
+            else:
+                continue
+            break
+        return ret
+
+    for i in range(63): f(0, [])
+
+    f(1, [True])
+
+    # As long as it doesn't crash, everything's good.
+
+print("Regression tests...Done!")
 
 print("Tests completed ^-^")
