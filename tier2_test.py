@@ -573,6 +573,48 @@ with TestInfo("multiple jump targets in a single BB"):
 
     # As long as it doesn't crash, everything's good.
 
+
+with TestInfo("multiple jump targets in a single BB that could be jumped to"):
+    # See https://github.com/pylbbv/pylbbv/issues/38 for more information.
+    def f(x, l): 
+        if x == 1: # Trigger tier2 generation 
+            return x+x  
+        while True: 
+            for i in l: 
+                if i: break 
+            else: 
+                l = [True] 
+                continue 
+            break 
+    
+    for i in range(63): f(1, [])
+
+    f(0, [False])
+
+    # As long as it doesn't crash, everything's good
+
+with TestInfo("a special op itself could also be a jump target"):
+    # See https://github.com/pylbbv/pylbbv/issues/38 for more information.
+    def f(x, items):
+        if x == 0: # Trigger tier2 generation
+            return x+x 
+        ret = "uwu"
+        x = 1
+        while True and x < 256:
+            x += 1
+            for item in items:
+                if not item: break
+            else:
+                continue
+            break
+        return ret
+
+    for i in range(63): f(0, [])
+
+    f(1, [True])
+
+    # As long as it doesn't crash, everything's good
+
 print("Regression tests...Done!")
 
 print("Tests completed ^-^")
