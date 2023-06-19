@@ -1312,7 +1312,7 @@ emit_logical_branch(_PyTier2TypeContext *type_context, _Py_CODEUNIT *write_curr,
         // we can't handle are in IS_FORBIDDEN_OPCODE
 #if BB_DEBUG
         fprintf(stderr,
-            "emit_logical_branch unreachable opcode %d\n", _Py_OPCODE(branch));
+            "emit_logical_branch unreachable opcode %d\n", branch.op.code);
 #endif
         Py_UNREACHABLE();
     }
@@ -1373,9 +1373,9 @@ emit_logical_branch(_PyTier2TypeContext *type_context, _Py_CODEUNIT *write_curr,
         return write_curr;
     }
     else {
-#if BB_DEBUG
-        fprintf(stderr, "emitted logical branch %p %d\n", write_curr,
-            _Py_OPCODE(branch));
+#if BB_DEBUG && defined Py_DEBUG
+        fprintf(stderr, "emitted logical branch %p %s from original opcode %s\n", write_curr,
+            _PyOpcode_OpName[opcode], _PyOpcode_OpName[branch.op.code]);
 #endif
         _py_set_opcode(write_curr, requires_extended_arg ? EXTENDED_ARG : NOP);
         write_curr->op.arg = (oparg >> 8) & 0xFF;
@@ -1519,6 +1519,9 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, _PyTier2BBMetadata *meta,
     int backwards_jump_target, _PyTier2TypeContext *starting_context,
     _Py_CODEUNIT *tier1_start)
 {
+#if BB_DEBUG
+    fprintf(stderr, "Attempting to add jump id %d as jump target\n", meta->id);
+#endif
     // Locate where to insert the BB ID
     int backward_jump_offset_index = 0;
     bool found = false;
@@ -1536,6 +1539,9 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, _PyTier2BBMetadata *meta,
     for (; jump_i < MAX_BB_VERSIONS; jump_i++) {
         if (t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].id ==
             -1) {
+#if BB_DEBUG
+            fprintf(stderr, "Added jump id %d as jump target\n", meta->id);
+#endif
             t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].id =
                 meta->id;
             t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].start_type_context = starting_context;
@@ -1811,6 +1817,13 @@ _PyTier2_Code_DetectAndEmitBB(
 #define DISPATCH_GOTO() goto dispatch_opcode;
 #define TYPECONST_GET_RAWTYPE(idx) Py_TYPE(PyTuple_GET_ITEM(consts, idx))
 #define GET_CONST(idx) PyTuple_GET_ITEM(consts, idx)
+#define CHECK_BACKWARDS_JUMP_TARGET() \
+    if (!checked_jump_target) { \
+    from_another_opcode = true;\
+    goto check_backwards_jump_target;\
+}\
+    checked_jump_target = false; \
+    from_another_opcode = false; \
 
     assert(co->_tier2_info != NULL);
     // There are only two cases that a BB ends.
@@ -1834,6 +1847,8 @@ _PyTier2_Code_DetectAndEmitBB(
     bool virtual_start = false;
     _PyTier2TypeContext *start_type_context_copy = NULL;
     _Py_CODEUNIT *virtual_tier1_start = NULL;
+    bool from_another_opcode = false;
+    bool checked_jump_target = false;
 
     // A meta-interpreter for types.
     Py_ssize_t i = (tier1_start - _PyCode_CODE(co));
@@ -1854,9 +1869,11 @@ _PyTier2_Code_DetectAndEmitBB(
 #endif
         switch (opcode) {
         case RESUME:
+            CHECK_BACKWARDS_JUMP_TARGET();
             opcode = specop = RESUME_QUICK;
             DISPATCH();
         case END_FOR:
+            CHECK_BACKWARDS_JUMP_TARGET();
             // Assert that we are the start of a BB
             assert(t2_start == write_i);
 
@@ -1869,6 +1886,7 @@ _PyTier2_Code_DetectAndEmitBB(
             // Else, we do want to execute this.
             DISPATCH();
         case POP_TOP: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t **type_stackptr = &starting_type_context->type_stack_ptr;
@@ -1879,6 +1897,7 @@ _PyTier2_Code_DetectAndEmitBB(
             DISPATCH();
         }
         case COPY: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t **type_stackptr = &starting_type_context->type_stack_ptr;
@@ -1889,6 +1908,7 @@ _PyTier2_Code_DetectAndEmitBB(
             DISPATCH();
         }
         case LOAD_CONST: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             PyTypeObject *typ = TYPECONST_GET_RAWTYPE(oparg);
             if (typ == &PyFloat_Type) {
                 write_i = emit_i(write_i, LOAD_CONST, curr->op.arg);
@@ -1916,6 +1936,7 @@ _PyTier2_Code_DetectAndEmitBB(
             DISPATCH();
         }
         case LOAD_FAST: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t *type_locals = starting_type_context->type_locals;
@@ -1944,6 +1965,7 @@ _PyTier2_Code_DetectAndEmitBB(
             DISPATCH();
         }
         case LOAD_FAST_CHECK: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t *type_locals = starting_type_context->type_locals;
@@ -1972,6 +1994,7 @@ _PyTier2_Code_DetectAndEmitBB(
             DISPATCH();
         }
         case STORE_FAST: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             // Read-only, only for us to inspect the types. DO NOT MODIFY HERE.
             // ONLY THE TYPES PROPAGATOR SHOULD MODIFY THEIR INTERNAL VALUES.
             _Py_TYPENODE_t *type_locals = starting_type_context->type_locals;
@@ -1999,13 +2022,17 @@ _PyTier2_Code_DetectAndEmitBB(
         }
         // Need to handle reboxing at these boundaries.
         case CALL:
+            CHECK_BACKWARDS_JUMP_TARGET();
             DISPATCH_REBOX(oparg + 2);
         case BUILD_MAP:
+            CHECK_BACKWARDS_JUMP_TARGET();
             DISPATCH_REBOX(oparg * 2);
         case BUILD_STRING:
         case BUILD_LIST:
+            CHECK_BACKWARDS_JUMP_TARGET();
             DISPATCH_REBOX(oparg);
         case BINARY_OP:
+            CHECK_BACKWARDS_JUMP_TARGET();
             if (oparg == NB_ADD || oparg == NB_SUBTRACT || oparg == NB_MULTIPLY) {
                 // Add operation. Need to check if we can infer types.
                 _Py_CODEUNIT *possible_next = infer_BINARY_OP(t2_start,
@@ -2029,6 +2056,7 @@ _PyTier2_Code_DetectAndEmitBB(
             }
             DISPATCH_REBOX(2);
         case BINARY_SUBSCR: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             _Py_CODEUNIT *possible_next = infer_BINARY_SUBSCR(
                 t2_start, oparg, &needs_guard,
                 *curr,
@@ -2049,6 +2077,7 @@ _PyTier2_Code_DetectAndEmitBB(
             continue;
         }
         case STORE_SUBSCR: {
+            CHECK_BACKWARDS_JUMP_TARGET();
             _Py_CODEUNIT *possible_next = infer_BINARY_SUBSCR(
                 t2_start, oparg, &needs_guard,
                 *curr,
@@ -2075,11 +2104,14 @@ _PyTier2_Code_DetectAndEmitBB(
         case UNARY_INVERT:
         case GET_LEN:
         case UNPACK_SEQUENCE:
+            CHECK_BACKWARDS_JUMP_TARGET();
             DISPATCH_REBOX(1);
         case CALL_INTRINSIC_2:
         case BINARY_SLICE:
+            CHECK_BACKWARDS_JUMP_TARGET();
             DISPATCH_REBOX(2);
         case STORE_SLICE:
+            CHECK_BACKWARDS_JUMP_TARGET();
             DISPATCH_REBOX(4);
         default:
 #if BB_DEBUG && !TYPEPROP_DEBUG
@@ -2087,19 +2119,38 @@ _PyTier2_Code_DetectAndEmitBB(
 #endif
             // This should be the end of another basic block, or the start of a new.
             // Start of a new basic block, just ignore and continue.
+start_virtual_bb:
             if (virtual_start) {
+                checked_jump_target = true;
 #if BB_DEBUG
                 fprintf(stderr, "Emitted virtual start of basic block\n");
 #endif
-                starts_with_backwards_jump_target = true;
                 virtual_start = false;
                 start_type_context_copy = _PyTier2TypeContext_Copy(starting_type_context);
                 if (start_type_context_copy == NULL) {
                     _PyTier2TypeContext_Free(starting_type_context);
                     return NULL;
                 }
+                // Add the basic block to the jump ids
+                assert(start_type_context_copy != NULL);
+                assert(virtual_tier1_start != NULL);
+                if (add_metadata_to_jump_2d_array(t2_info, meta,
+                    backwards_jump_target_offset, start_type_context_copy,
+                    virtual_tier1_start) < 0) {
+                    PyMem_Free(meta);
+                    if (meta != temp_meta) {
+                        PyMem_Free(temp_meta);
+                    }
+                    _PyTier2TypeContext_Free(starting_type_context);
+                    return NULL;
+                }
+                if (from_another_opcode) {
+                    DISPATCH_GOTO();
+                }
                 goto fall_through;
             }
+check_backwards_jump_target:
+            checked_jump_target = true;
             if (IS_BACKWARDS_JUMP_TARGET(co, curr)) {
 #if BB_DEBUG
                 fprintf(stderr, "Encountered a backward jump target\n");
@@ -2142,6 +2193,10 @@ _PyTier2_Code_DetectAndEmitBB(
                     DISPATCH_GOTO();
                 }
                 // Don't change opcode or oparg, let us handle it again.
+                goto start_virtual_bb;
+            }
+            if (from_another_opcode) {
+                from_another_opcode = false;
                 DISPATCH_GOTO();
             }
         fall_through:
@@ -2202,21 +2257,6 @@ end:
     // before us, then we use that instead of the most recent block.
     if (meta == NULL) {
         meta = temp_meta;
-    }
-    if (starts_with_backwards_jump_target) {
-        // Add the basic block to the jump ids
-        assert(start_type_context_copy != NULL);
-        assert(virtual_tier1_start != NULL);
-        if (add_metadata_to_jump_2d_array(t2_info, temp_meta,
-            backwards_jump_target_offset, start_type_context_copy,
-            virtual_tier1_start) < 0) {
-            PyMem_Free(meta);
-            if (meta != temp_meta) {
-                PyMem_Free(temp_meta);
-            }
-            _PyTier2TypeContext_Free(starting_type_context);
-            return NULL;
-        }
     }
     // Tell BB space the number of bytes we wrote.
     // -1 becaues write_i points to the instruction AFTER the end
@@ -3025,6 +3065,9 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
             jump_offset_id = i;
             for (int x = 0; x < MAX_BB_VERSIONS; x++) {
                 int target_bb_id = t2_info->backward_jump_target_bb_pairs[i][x].id;
+#if BB_DEBUG
+                fprintf(stderr, "jump offset bb id considered: %d\n", target_bb_id);
+#endif
                 if (target_bb_id >= 0) {
                     candidate_bb_id = target_bb_id;
                     candidate_bb_tier1_start = t2_info->backward_jump_target_bb_pairs[i][x].tier1_start;
