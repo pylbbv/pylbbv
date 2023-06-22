@@ -79,11 +79,42 @@ We did a major refactor of our code generation machinery. This makes the code ea
 
 ## Architecture Diagram and Design
 
-[comment]: <> (TODOOOOO)
+```mermaid
+sequenceDiagram
+    autonumber
+    participant CPython Compiler
+    participant Tier 0
+    participant Tier 1
+    box rgba(66,120,99,0.1) Our Project
+        participant Tier 2
+        participant Type Propagator
+    end
+    CPython Compiler ->> Tier 0: Emits code for <br> Tier 0 to execute
+    loop 
+        Tier 0 ->> Tier 1: Individual instructions <br>profile the data it <br> receives and overwrites <br>  itself to a more efficient <br> instruction.
+        Tier 1 ->> Tier 0: If optimisation is <br> invalid, de-optimise <br> back to Tier 0
+    end
+    Tier 1 ->> Tier 2: Code executed more <br> than 63 times and <br> Tier 1 instructions <br> present, triggers the <br> Tier 2 interpreter
+    loop Until exit scope executed
+        loop until Tier 2 encounters type-specialised tier 1 instruction
+            Note over Tier 2: Tier 2 copies Tier 1 <br> instructions into a <br> buffer to be executed <br> according to runtime <br> type info
+            Tier 2 ->> Type Propagator: Requests type propagator 
+            Type Propagator ->> Tier 2: Type propagator <br> updates runtime type <br> info based on <br>newly emitted code
+        end
+        Note over Tier 2: Emits a typeguard <br> and executes Tier 2 code <br> until typeguard is hit.
+        Tier 2 ->> Type Propagator: Requests type propagator
+        Type Propagator ->> Tier 2: Type propagator updates <br> runtime type info <br> based on  branch taken
+        Note over Tier 2: Emits type specialised <br> branch according to <br> runtime type info
+    end
+```
 
 ## What's left for our project
 
 - The Copy and Patch JIT compiler.
+
+## Evaluation and benchmarks
+
+We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results. For now we expect performance to have no improvement as we have yet to implement the copy and patch JIT compiler.
 
 ## Changelog over CS4215
 
