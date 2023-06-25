@@ -636,7 +636,7 @@ with TestInfo("infer_BINARY_OP to be compatible with smallint"):
     insts = dis.get_instructions(test_typeprop1, tier2=True)
     assert [x.opname for x in insts].count("BINARY_OP_ADD_INT_REST") == 2
 
-    # Testing both sides smalling
+    # Testing both sides smallint
     def f(a, b):
         z = a + b
         w = 1
