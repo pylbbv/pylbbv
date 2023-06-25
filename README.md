@@ -116,6 +116,10 @@ sequenceDiagram
 
 We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results. For now we expect performance to have no improvement as we have yet to implement the copy and patch JIT compiler.
 
+## Trying this project out
+
+We provide pre-compiled binaries for 64-bit Windows 10/11 via GitHub releases.
+
 ## Changelog over CS4215
 
 * Refactor: Typeprop codegen by @JuliaPoo in https://github.com/pylbbv/pylbbv/pull/1
