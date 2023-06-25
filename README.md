@@ -125,6 +125,21 @@ We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py
     * Split `BINARY_CHECK_X` into simply `CHECK_X` and short-circuit failure paths. This allows us to follow more closely to the LBBV paper. It also means we can supported cases where one operand is known but the other unknown.
 * Perf: Improved typeprop by switching overwrite -> set by @JuliaPoo in https://github.com/pylbbv/pylbbv/pull/6
     * Stricter type propagation reduces type information loss
+* Improved support for Tier 2 code generation
+    * Insert cache entries for `SUBSCR` tier 2 instructions in https://github.com/pylbbv/pylbbv/pull/13
+    * Fixed off by one error in forward jump calculation in https://github.com/pylbbv/pylbbv/pull/19
+    * Fixed wrong offset in `BB_BRANCH_IF_FLAG_SET` codegen in https://github.com/pylbbv/pylbbv/pull/21
+    * Fixed `BB_TEST_POP_IF_FALSE` not setting flag in https://github.com/pylbbv/pylbbv/pull/24
+    * Recursive generation of basic blocks in https://github.com/pylbbv/pylbbv/pull/29
+    * Mark interpreter frames as tier 2 or not in https://github.com/pylbbv/pylbbv/pull/34
+    * Make instruction offset calculation frame aware in https://github.com/pylbbv/pylbbv/pull/37
+    * Support multiple entry points in a Basic Block in https://github.com/pylbbv/pylbbv/pull/39 and https://github.com/pylbbv/pylbbv/pull/40
+* Improved workflow:
+    * workflow: enable CI GH actions tests in https://github.com/pylbbv/pylbbv/pull/35
+* Improved type propagator:
+    * Store negative/inverted types in type propagator nodes in https://github.com/pylbbv/pylbbv/pull/36
+        * Note: This eliminates the Ladder guards mentioned in our previous technical report.
+    * Fixed backward jump type context compatibility check in https://github.com/pylbbv/pylbbv/pull/10
 
 ## Build instructions
 
