@@ -615,6 +615,36 @@ with TestInfo("a special op itself could also be a jump target"):
 
     # As long as it doesn't crash, everything's good
 
+with TestInfo("infer_BINARY_OP to be compatible with smallint"):
+    # See https://github.com/pylbbv/pylbbv/issues/45 for more information.
+
+    # Testing left smallint
+    def f(a, b):
+        z = a + b
+        return z + 1
+
+    trigger_tier2(f, (1,1))
+    insts = dis.get_instructions(test_typeprop1, tier2=True)
+    assert [x.opname for x in insts].count("BINARY_OP_ADD_INT_REST") == 2
+
+    # Testing right smallint
+    def f(a, b):
+        z = a + b
+        return 1 + z
+
+    trigger_tier2(f, (1,1))
+    insts = dis.get_instructions(test_typeprop1, tier2=True)
+    assert [x.opname for x in insts].count("BINARY_OP_ADD_INT_REST") == 2
+
+    # Testing both sides smalling
+    def f(a, b):
+        z = a + b
+        w = 1
+        return 1 + w
+    trigger_tier2(f, (1,1))
+    insts = dis.get_instructions(test_typeprop1, tier2=True)
+    assert [x.opname for x in insts].count("BINARY_OP_ADD_INT_REST") == 2
+
 print("Regression tests...Done!")
 
 print("Tests completed ^-^")

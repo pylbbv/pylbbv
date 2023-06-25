@@ -1616,12 +1616,13 @@ infer_BINARY_OP(
     PyTypeObject *righttype = (PyTypeObject *)_Py_TYPENODE_CLEAR_TAG(rightroot);
 
     if (_Py_TYPENODE_IS_POSITIVE_NULL(leftroot)
-        && (righttype == &PyLong_Type
+        && (righttype == &PyLong_Type || righttype == &PySmallInt_Type
             || righttype == &PyFloat_Type || righttype == &PyRawFloat_Type)) {
         // Check if same type as right
         *needs_guard = true;
         write_curr = emit_type_guard(write_curr,
-            righttype == &PyLong_Type ? CHECK_INT : CHECK_FLOAT, 1, bb_id);
+            (righttype == &PyLong_Type || righttype == &PySmallInt_Type)
+            ? CHECK_INT : CHECK_FLOAT, 1, bb_id);
         return write_curr;
     }
     if (_Py_TYPENODE_GET_TAG(leftroot) == TYPE_ROOT_NEGATIVE) {
@@ -1661,7 +1662,8 @@ infer_BINARY_OP(
         type_propagate(opcode, 0, type_context, NULL);
         return write_curr;
     }
-    if (righttype == &PyLong_Type && lefttype == &PyLong_Type) {
+    if ((righttype == &PyLong_Type || righttype == &PySmallInt_Type)
+        && (lefttype == &PyLong_Type || lefttype == &PySmallInt_Type)) {
         int opcode = oparg == NB_ADD
             ? BINARY_OP_ADD_INT_REST
             : oparg == NB_SUBTRACT
