@@ -138,6 +138,7 @@ We provide pre-compiled binaries for 64-bit Windows 10/11 via GitHub releases.
     * Mark interpreter frames as tier 2 or not in https://github.com/pylbbv/pylbbv/pull/34
     * Make instruction offset calculation frame aware in https://github.com/pylbbv/pylbbv/pull/37
     * Support multiple entry points in a Basic Block in https://github.com/pylbbv/pylbbv/pull/39 and https://github.com/pylbbv/pylbbv/pull/40
+    * `BINARY_OP` specialisations now apply to `PySmallInt_Type` in https://github.com/pylbbv/pylbbv/pull/46
 * Improved workflow:
     * workflow: enable CI GH actions tests in https://github.com/pylbbv/pylbbv/pull/35
 * Improved type propagator:
