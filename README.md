@@ -138,6 +138,7 @@ We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py
     * workflow: enable CI GH actions tests in https://github.com/pylbbv/pylbbv/pull/35
 * Improved type propagator:
     * Store negative/inverted types in type propagator nodes in https://github.com/pylbbv/pylbbv/pull/36
+        * Note: This eliminates the Ladder guards mentioned in our previous technical report.
     * Fixed backward jump type context compatibility check in https://github.com/pylbbv/pylbbv/pull/10
 
 ## Build instructions
