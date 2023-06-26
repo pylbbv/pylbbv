@@ -2,6 +2,10 @@
 
 A WIP Lazy Basic Block Versioning + (eventually) Copy and Patch JIT Interpreter for CPython.
 
+## Trying this project out
+
+We provide pre-compiled binaries for 64-bit Windows 10/11 via [GitHub releases](https://github.com/pylbbv/pylbbv/releases/).
+
 ## The case for our project
 
 Python is a widely-used programming language. As a Python user, I want CPython code to execute quicker.
@@ -115,10 +119,6 @@ sequenceDiagram
 ## Evaluation and benchmarks
 
 We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results. For now we expect performance to have no improvement as we have yet to implement the copy and patch JIT compiler.
-
-## Trying this project out
-
-We provide pre-compiled binaries for 64-bit Windows 10/11 via GitHub releases.
 
 ## Changelog over CS4215
 
