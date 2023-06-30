@@ -45,7 +45,7 @@ This Orbital, we intend to refine pyLBBV. These include but are not limited to:
 - [X] Bug fixing
 - [X] A more advanced type propagator.
 - [X] A more comprehensive test suite with Continuous Integration testing.
-- [ ] A copy and patch JIT compiler.
+- [ ] A copy and patch JIT compiler. (Not yet implemented!)
 
 A JIT(Just-in-Time) compiler is just a program that generates native machine executable code at runtime. [Copy and Patch](https://arxiv.org/abs/2011.13127) is a new fast compilation technique developed rather recently. The general idea is that compilation normally requires multiple steps, thus making compilation slow (recall how many steps your SICP meta-circular evaluator needs to execute JS)! Copy and patch makes compilation faster by skipping all the intermediate steps, and just creating "templates" for
 the final code. These "templates" are called *stencils* and they contain *holes*, i.e. missing values. All you have to do for compilation now is to copy and template, and patch in the holes. Thus making it very fast!
@@ -77,7 +77,7 @@ We did a major refactor of our code generation machinery. This makes the code ea
 ##### SWE dev best practices and CI testing
 
 - We have added both feature tests and regression tests to our test script in [tier2_test.py](./tier2_test.py).
-- We now have continous integration. We build our project and run tests using GitHub Actions for Windows 64-bit, on every pull request and commit to the repository!
+- We now have continous integration. We automatically build our project and run tests using GitHub Actions for Windows 64-bit, on every pull request and commit to the repository!
 ![image](./orbital/CI.png)
 - All PRs require review and an approval before merging is allowed. All tests in CI must also pass. This follows standard best practices.
 
