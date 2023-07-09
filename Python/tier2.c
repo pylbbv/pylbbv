@@ -14,7 +14,7 @@
 // Max typed version basic blocks per basic block
 #define MAX_BB_VERSIONS 10
 
-#define OVERALLOCATE_FACTOR 10
+#define OVERALLOCATE_FACTOR 20
 
 
 /* Dummy types used by the types propagator */
