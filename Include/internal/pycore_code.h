@@ -12,10 +12,16 @@ typedef struct {
     // The LSB indicates whether the bb branch is a type guard or not.
     // To get the actual BB ID, do a right bit shift by one.
     uint16_t bb_id_tagged;
+    // Forward jump if required since not all successor BBs are fall-through.
     uint16_t successor_jumpby;
+    // Function pointers to trace.
+    uint16_t consequent_trace[4];
+    uint16_t alternative_trace[4];
 } _PyBBBranchCache;
 
 #define INLINE_CACHE_ENTRIES_BB_BRANCH CACHE_ENTRIES(_PyBBBranchCache)
+
+#define INLINE_CACHE_ENTRIES_JUMP_BACKWARD CACHE_ENTRIES(_PyBBBranchCache)
 
 /* PEP 659
  * Specialization and quickening structs and helper functions
@@ -102,6 +108,7 @@ typedef struct {
 } _PyForIterCache;
 
 #define INLINE_CACHE_ENTRIES_FOR_ITER CACHE_ENTRIES(_PyForIterCache)
+
 
 typedef struct {
     uint16_t counter;

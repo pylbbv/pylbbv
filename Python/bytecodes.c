@@ -1929,13 +1929,13 @@ dummy_func(
             JUMPBY(oparg);
         }
 
-        inst(JUMP_BACKWARD, (--)) {
+        inst(JUMP_BACKWARD, (unused/10 --)) {
             frame->f_code->_tier2_warmup++;
             GO_TO_INSTRUCTION(JUMP_BACKWARD_QUICK);
         }
 
-        inst(JUMP_BACKWARD_QUICK, (--)) {
-            assert(oparg < INSTR_OFFSET());
+        inst(JUMP_BACKWARD_QUICK, (unused/10 --)) {
+            assert((oparg - INLINE_CACHE_ENTRIES_JUMP_BACKWARD) < INSTR_OFFSET());
             JUMPBY(-oparg);
             CHECK_EVAL_BREAKER();
         }
@@ -2299,6 +2299,7 @@ dummy_func(
             Py_DECREF(iter);
             STACK_SHRINK(1);
             /* Jump forward oparg, then skip following END_FOR instruction */
+            next = Py_NewRef(Py_None);
             JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER + oparg + 1);
             DISPATCH();
         end_for_iter_tuple:
@@ -3284,7 +3285,7 @@ dummy_func(
 
         // Tier 2 instructions
         // Type propagator assumes this doesn't affect type context
-        inst(BB_BRANCH, (unused/2 --)) {
+        inst(BB_BRANCH, (unused/10 --)) {
             _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             _Py_CODEUNIT *tier1_fallback = NULL;
@@ -3321,7 +3322,7 @@ dummy_func(
             DISPATCH();
         }
 
-        inst(BB_BRANCH_IF_FLAG_UNSET, (unused/2 --)) {
+        inst(BB_BRANCH_IF_FLAG_UNSET, (unused/10 --)) {
             if (!BB_TEST_IS_SUCCESSOR(bb_test)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
@@ -3346,7 +3347,7 @@ dummy_func(
             DISPATCH();
         }
 
-        inst(BB_JUMP_IF_FLAG_UNSET, (unused/2 --)) {
+        inst(BB_JUMP_IF_FLAG_UNSET, (unused/10 --)) {
             if (!BB_TEST_IS_SUCCESSOR(bb_test)) {
                 JUMPBY(oparg);
                 DISPATCH();
@@ -3356,7 +3357,7 @@ dummy_func(
             DISPATCH();
         }
 
-        inst(BB_BRANCH_IF_FLAG_SET, (unused/2 --)) {
+        inst(BB_BRANCH_IF_FLAG_SET, (unused/10 --)) {
             if (BB_TEST_IS_SUCCESSOR(bb_test)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
@@ -3381,7 +3382,7 @@ dummy_func(
             DISPATCH();
         }
 
-        inst(BB_JUMP_IF_FLAG_SET, (unused/2 --)) {
+        inst(BB_JUMP_IF_FLAG_SET, (unused/10 --)) {
             if (BB_TEST_IS_SUCCESSOR(bb_test)) {
                 JUMPBY(oparg);
                 DISPATCH();
@@ -3392,7 +3393,7 @@ dummy_func(
         }
 
         // Type propagator assumes this doesn't affect type context
-        inst(BB_JUMP_BACKWARD_LAZY, (--)) {
+        inst(BB_JUMP_BACKWARD_LAZY, (unused/10--)) {
             _Py_CODEUNIT *curr = next_instr - 1;
             _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
@@ -3409,6 +3410,7 @@ dummy_func(
 
             // Rewrite self
             _PyTier2_RewriteBackwardJump(curr, next_instr);
+            DISPATCH();
         }
 
 
