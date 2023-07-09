@@ -231,24 +231,16 @@ extern int _PyLineTable_PreviousAddressRange(PyCodeAddressRange *range);
 
 /* Specialization functions */
 
-extern void _Py_Specialize_LoadAttr(PyObject *owner, _Py_CODEUNIT *instr,
-                                    PyObject *name);
-extern void _Py_Specialize_StoreAttr(PyObject *owner, _Py_CODEUNIT *instr,
-                                     PyObject *name);
-extern void _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
-                                      _Py_CODEUNIT *instr, PyObject *name);
-extern void _Py_Specialize_BinarySubscr(PyObject *sub, PyObject *container,
-                                        _Py_CODEUNIT *instr);
-extern void _Py_Specialize_StoreSubscr(PyObject *container, PyObject *sub,
-                                       _Py_CODEUNIT *instr);
-extern void _Py_Specialize_Call(PyObject *callable, _Py_CODEUNIT *instr,
-                                int nargs, PyObject *kwnames);
-extern void _Py_Specialize_BinaryOp(PyObject *lhs, PyObject *rhs, _Py_CODEUNIT *instr,
-                                    int oparg, PyObject **locals);
-extern void _Py_Specialize_CompareOp(PyObject *lhs, PyObject *rhs,
-                                     _Py_CODEUNIT *instr, int oparg);
+pyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyObject *owner, _Py_CODEUNIT *instr, PyObject *name);
+pyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyObject *owner, _Py_CODEUNIT *instr, PyObject *name);
+pyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins, _Py_CODEUNIT *instr, PyObject *name);
+pyAPI_FUNC(void) _Py_Specialize_BinarySubscr(PyObject *sub, PyObject *container, _Py_CODEUNIT *instr);
+pyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyObject *container, PyObject *sub, _Py_CODEUNIT *instr);
+pyAPI_FUNC(void) _Py_Specialize_Call(PyObject *callable, _Py_CODEUNIT *instr, int nargs, PyObject *kwnames);
+pyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyObject *lhs, PyObject *rhs, _Py_CODEUNIT *instr, int oparg, PyObject **locals);
+pyAPI_FUNC(void) _Py_Specialize_CompareOp(PyObject *lhs, PyObject *rhs, _Py_CODEUNIT *instr, int oparg);
 extern void _Py_Specialize_UnpackSequence(PyObject *seq, _Py_CODEUNIT *instr,
-                                          int oparg);
+                                   int oparg);
 extern void _Py_Specialize_ForIter(PyObject *iter, _Py_CODEUNIT *instr, int oparg, char is_bb);
 extern void _Py_Specialize_Send(PyObject *receiver, _Py_CODEUNIT *instr);
 
