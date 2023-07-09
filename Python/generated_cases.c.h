@@ -3037,7 +3037,6 @@
             Py_DECREF(iter);
             STACK_SHRINK(1);
             /* Jump forward oparg, then skip following END_FOR instruction */
-            next = Py_NewRef(Py_None);
             JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER + oparg + 1);
             DISPATCH();
         end_for_iter_tuple:
