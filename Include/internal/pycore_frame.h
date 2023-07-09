@@ -63,6 +63,8 @@ typedef struct _PyInterpreterFrame {
     uint16_t yield_offset;
     char owner;
     bool is_tier2;
+    // For restoring state after entering the JIT code.
+    char bb_test;
     /* Locals and stack and unboxed bit mask */
     PyObject *localsplus[1];
 } _PyInterpreterFrame;
@@ -138,6 +140,7 @@ _PyFrame_Initialize(
         frame->is_tier2 = false;
         frame->prev_instr = _PyCode_CODE(code) - 1;
     }
+    frame->bb_test = BB_TEST(0, 0);
     frame->yield_offset = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
 

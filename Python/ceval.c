@@ -752,6 +752,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry_frame.owner = FRAME_OWNED_BY_CSTACK;
     entry_frame.yield_offset = 0;
     entry_frame.is_tier2 = false;
+    entry_frame.bb_test = bb_test;
     /* Push frame */
     entry_frame.previous = prev_cframe->current_frame;
     frame->previous = &entry_frame;
@@ -785,6 +786,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     /* Jump back to the last instruction executed... */ \
     next_instr = frame->prev_instr + 1; \
     stack_pointer = _PyFrame_GetStackPointer(frame); \
+    bb_test = frame->bb_test; \
     /* Set stackdepth to -1. \
         Update when returning or calling trace function. \
         Having stackdepth <= 0 ensures that invalid \
