@@ -164,6 +164,7 @@ PyAPI_FUNC(int) _Py_HandlePending(PyThreadState *tstate);
 PyAPI_FUNC(void) _PyEvalFrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
 PyAPI_FUNC(_PyInterpreterFrame *)_PyEvalFramePushAndInit(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals, PyObject* const* args, size_t argcount, PyObject *kwnames);
 
+PyAPI_FUNC(PyObject *)trace_call_function(PyThreadState *tstate, PyObject *func, PyObject **args, Py_ssize_t nargs, PyObject *kwnames);
 
 
 #ifdef __cplusplus

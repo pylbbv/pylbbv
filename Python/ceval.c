@@ -2465,7 +2465,7 @@ if (use_tracing && tstate->c_profilefunc) { \
     }
 
 
-static PyObject *
+PyObject *
 trace_call_function(PyThreadState *tstate,
                     PyObject *func,
                     PyObject **args, Py_ssize_t nargs,
