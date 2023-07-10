@@ -65,11 +65,15 @@
             if (cframe.use_tracing == 0) {
                 next_instr = _PyCode_Tier2Warmup(frame, next_instr);
             }
-            GO_TO_INSTRUCTION(RESUME_QUICK);
+            // GO_TO_INSTRUCTION(RESUME_QUICK);
+            assert(frame == cframe.current_frame);
+            if (_Py_atomic_load_relaxed_int32(&tstate->interp->ceval.eval_breaker) && oparg < 2) {
+                goto handle_eval_breaker;
+            }
+            DISPATCH();
         }
 
         TARGET(RESUME_QUICK) {
-            PREDICTED(RESUME_QUICK);
             //assert(tstate->cframe == &cframe);
             assert(frame == cframe.current_frame);
             if (_Py_atomic_load_relaxed_int32(&tstate->interp->ceval.eval_breaker) && oparg < 2) {
@@ -967,10 +971,10 @@
             STACK_SHRINK(1);
             assert(EMPTY());
             _PyFrame_SetStackPointer(frame, stack_pointer);
-            TRACE_FUNCTION_EXIT();
-            DTRACE_FUNCTION_EXIT();
+            //JULES//TRACE_FUNCTION_EXIT();
+            //JULES//DTRACE_FUNCTION_EXIT();
             _Py_LeaveRecursiveCallPy(tstate);
-            assert(frame != &entry_frame);
+            //JULES//assert(frame != &entry_frame);
             // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
             frame = cframe.current_frame = dying->previous;
@@ -984,10 +988,10 @@
             Py_INCREF(retval);
             assert(EMPTY());
             _PyFrame_SetStackPointer(frame, stack_pointer);
-            TRACE_FUNCTION_EXIT();
-            DTRACE_FUNCTION_EXIT();
+            //JULES//TRACE_FUNCTION_EXIT();
+            //JULES//DTRACE_FUNCTION_EXIT();
             _Py_LeaveRecursiveCallPy(tstate);
-            assert(frame != &entry_frame);
+            //JULES//assert(frame != &entry_frame);
             // GH-99729: We need to unlink the frame *before* clearing it:
             _PyInterpreterFrame *dying = frame;
             frame = cframe.current_frame = dying->previous;
@@ -1144,7 +1148,7 @@
             if (retval == NULL) {
                 if (tstate->c_tracefunc != NULL
                         && _PyErr_ExceptionMatches(tstate, PyExc_StopIteration))
-                    call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, frame);
+                    // JULES // call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, frame);
                 if (_PyGen_FetchStopIterationValue(&retval) == 0) {
                     assert(retval != NULL);
                     JUMPBY(oparg);
@@ -2900,7 +2904,7 @@
                         goto error;
                     }
                     else if (tstate->c_tracefunc != NULL) {
-                        call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, frame);
+                        // JULES // call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, frame);
                     }
                     _PyErr_Clear(tstate);
                 }
@@ -2941,7 +2945,7 @@
                         goto error;
                     }
                     else if (tstate->c_tracefunc != NULL) {
-                        call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, frame);
+                        // JULES // call_exc_trace(tstate->c_tracefunc, tstate->c_traceobj, tstate, frame);
                     }
                     _PyErr_Clear(tstate);
                 }
@@ -4124,7 +4128,7 @@
             gen->gi_frame_state = FRAME_CREATED;
             gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
             _Py_LeaveRecursiveCallPy(tstate);
-            assert(frame != &entry_frame);
+            //JULES//assert(frame != &entry_frame);
             _PyInterpreterFrame *prev = frame->previous;
             _PyThreadState_PopFrame(tstate, frame);
             frame = cframe.current_frame = prev;

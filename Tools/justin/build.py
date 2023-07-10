@@ -615,17 +615,22 @@ class Compiler:
             "BB_JUMP_IF_FLAG_SET",
             "BB_JUMP_BACKWARD_LAZY",
 
-            # Must eventually support
-            "BB_TEST_POP_IF_FALSE",
-            "BB_TEST_POP_IF_TRUE",
-            "BB_TEST_POP_IF_NOT_NONE",
-            "BB_TEST_POP_IF_NONE",
-            "BB_TEST_ITER",
-            "BB_TEST_ITER_LIST",
-            "BB_TEST_ITER_TUPLE",
-            "BB_TEST_ITER_RANGE",
-            "BEFORE_ASYNC_WITH"
-
+            # Tier 2 unsupported
+            "SEND",
+            "SEND_GEN",
+            "YIELD_VALUE",
+            "RAISE_VARARGS",
+            "PUSH_EXC_INFO",
+            "RERAISE",
+            "POP_EXCEPT",
+            "LOAD_DEREF",
+            "MAKE_CELL",
+            "DELETE_FAST",
+            "MATCH_MAPPING",
+            "MATCH_SEQUENCE",
+            "MATCH_KEYS",
+            "EXTENDED_ARG",
+            "WITH_EXCEPT_START",
         }
     )
 
