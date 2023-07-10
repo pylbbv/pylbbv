@@ -1,5 +1,6 @@
 #include "Python.h"
 
+#include "pycore_frame.h"
 #include "pycore_abstract.h"
 #include "pycore_call.h"
 #include "pycore_ceval.h"
@@ -116,7 +117,7 @@ exit_unwind:
     _PyInterpreterFrame *dying = frame;
     frame = cframe.current_frame = dying->previous;
     _PyEvalFrameClearAndPop(tstate, dying);
-    frame->return_offset = 0;
+    // frame->return_offset = 0; // ~ Jules commented out
     // if (frame == &entry_frame) {
     //     /* Restore previous cframe and exit */
     //     tstate->cframe = cframe.previous;

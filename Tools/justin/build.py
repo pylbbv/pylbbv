@@ -613,7 +613,19 @@ class Compiler:
             "BB_JUMP_IF_FLAG_UNSET",
             "BB_BRANCH_IF_FLAG_SET",
             "BB_JUMP_IF_FLAG_SET",
-            "BB_JUMP_BACKWARD_LAZY"
+            "BB_JUMP_BACKWARD_LAZY",
+
+            # Must eventually support
+            "BB_TEST_POP_IF_FALSE",
+            "BB_TEST_POP_IF_TRUE",
+            "BB_TEST_POP_IF_NOT_NONE",
+            "BB_TEST_POP_IF_NONE",
+            "BB_TEST_ITER",
+            "BB_TEST_ITER_LIST",
+            "BB_TEST_ITER_TUPLE",
+            "BB_TEST_ITER_RANGE",
+            "BEFORE_ASYNC_WITH"
+
         }
     )
 
@@ -677,13 +689,15 @@ class Compiler:
     async def build(self) -> None:
         generated_cases = PYTHON_GENERATED_CASES_C_H.read_text()
         pattern = r"(?s:\n( {8}TARGET\((\w+)\) \{\n.*?\n {8}\})\n)"
+        uop_pattern = r"(#define UOP(?:.|\n)+ \} while \(0\))"
         self._cases = {}
         for body, opname in re.findall(pattern, generated_cases):
             self._cases[opname] = body.replace(" " * 8, " " * 4)
+        uop_macros = "\n".join(re.findall(uop_pattern, generated_cases))
         template = TOOLS_JUSTIN_TEMPLATE.read_text()
         tasks = []
         for opname in sorted(self._cases.keys() - self._SKIP):
-            body = template % self._cases[opname]
+            body = template % "\n".join([uop_macros, self._cases[opname]])
             tasks.append(self._compile(opname, body))
         opname = "trampoline"
         body = TOOLS_JUSTIN_TRAMPOLINE.read_text()
