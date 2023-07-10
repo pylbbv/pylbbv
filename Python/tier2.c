@@ -2712,7 +2712,7 @@ _PyTier2_GenerateNextBBMetaWithTypeContext(
 #endif
         // Propagate the type guard information.
         uint8_t guard_opcode = prev_type_guard->op.code;
-        if (BB_TEST_IS_SUCCESSOR(bb_flag)) {
+        if (BB_TEST_IS_SUCCESSOR(frame)) {
             type_propagate(guard_opcode,
                 prev_type_guard->op.arg, type_context_copy, NULL);
         }

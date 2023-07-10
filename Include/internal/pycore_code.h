@@ -276,8 +276,8 @@ extern int _PyStaticCode_Init(PyCodeObject *co);
 //   requires a stack element to be popped.
 #define BB_TEST(gen_bb_is_successor, gen_bb_requires_pop) \
     (((gen_bb_is_successor) << 4) | (gen_bb_requires_pop))
-#define BB_TEST_IS_SUCCESSOR(bb_test) ((bb_test) >> 4)
-#define BB_TEST_GET_N_REQUIRES_POP(bb_test) ((bb_test) & 0b1111)
+#define BB_TEST_IS_SUCCESSOR(frame) ((frame->bb_test) >> 4)
+#define BB_TEST_GET_N_REQUIRES_POP(bb_flag) ((bb_flag) & 0b1111)
 
 extern _Py_CODEUNIT *_PyCode_Tier2Warmup(struct _PyInterpreterFrame *,
     _Py_CODEUNIT *);
