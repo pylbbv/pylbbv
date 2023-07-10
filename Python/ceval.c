@@ -9,6 +9,7 @@
 #include "pycore_code.h"
 #include "pycore_function.h"
 #include "pycore_intrinsics.h"
+#include "pycore_jit.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_moduleobject.h"  // PyModuleObject
@@ -83,13 +84,6 @@
             d(op); \
         } \
     } while (0)
-#endif
-
-// GH-89279: Similar to above, force inlining by using a macro.
-#if defined(_MSC_VER) && SIZEOF_INT == 4
-#define _Py_atomic_load_relaxed_int32(ATOMIC_VAL) (assert(sizeof((ATOMIC_VAL)->_value) == 4), *((volatile int*)&((ATOMIC_VAL)->_value)))
-#else
-#define _Py_atomic_load_relaxed_int32(ATOMIC_VAL) _Py_atomic_load_relaxed(ATOMIC_VAL)
 #endif
 
 /* Forward declarations */
@@ -204,11 +198,11 @@ static int check_except_star_type_valid(PyThreadState *tstate, PyObject* right);
 static void format_kwargs_error(PyThreadState *, PyObject *func, PyObject *kwargs);
 static void format_awaitable_error(PyThreadState *, PyTypeObject *, int);
 static int get_exception_handler(PyCodeObject *, int, int*, int*, int*);
-static _PyInterpreterFrame *
+_PyInterpreterFrame *
 _PyEvalFramePushAndInit(PyThreadState *tstate, PyFunctionObject *func,
                         PyObject *locals, PyObject* const* args,
                         size_t argcount, PyObject *kwnames);
-static void
+void
 _PyEvalFrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
 
 #define UNBOUNDLOCAL_ERROR_MSG \
@@ -286,36 +280,6 @@ _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
     }
     return 0;
 }
-
-
-static const binaryfunc binary_ops[] = {
-    [NB_ADD] = PyNumber_Add,
-    [NB_AND] = PyNumber_And,
-    [NB_FLOOR_DIVIDE] = PyNumber_FloorDivide,
-    [NB_LSHIFT] = PyNumber_Lshift,
-    [NB_MATRIX_MULTIPLY] = PyNumber_MatrixMultiply,
-    [NB_MULTIPLY] = PyNumber_Multiply,
-    [NB_REMAINDER] = PyNumber_Remainder,
-    [NB_OR] = PyNumber_Or,
-    [NB_POWER] = _PyNumber_PowerNoMod,
-    [NB_RSHIFT] = PyNumber_Rshift,
-    [NB_SUBTRACT] = PyNumber_Subtract,
-    [NB_TRUE_DIVIDE] = PyNumber_TrueDivide,
-    [NB_XOR] = PyNumber_Xor,
-    [NB_INPLACE_ADD] = PyNumber_InPlaceAdd,
-    [NB_INPLACE_AND] = PyNumber_InPlaceAnd,
-    [NB_INPLACE_FLOOR_DIVIDE] = PyNumber_InPlaceFloorDivide,
-    [NB_INPLACE_LSHIFT] = PyNumber_InPlaceLshift,
-    [NB_INPLACE_MATRIX_MULTIPLY] = PyNumber_InPlaceMatrixMultiply,
-    [NB_INPLACE_MULTIPLY] = PyNumber_InPlaceMultiply,
-    [NB_INPLACE_REMAINDER] = PyNumber_InPlaceRemainder,
-    [NB_INPLACE_OR] = PyNumber_InPlaceOr,
-    [NB_INPLACE_POWER] = _PyNumber_InPlacePowerNoMod,
-    [NB_INPLACE_RSHIFT] = PyNumber_InPlaceRshift,
-    [NB_INPLACE_SUBTRACT] = PyNumber_InPlaceSubtract,
-    [NB_INPLACE_TRUE_DIVIDE] = PyNumber_InPlaceTrueDivide,
-    [NB_INPLACE_XOR] = PyNumber_InPlaceXor,
-};
 
 
 // PEP 634: Structural Pattern Matching
@@ -675,16 +639,6 @@ int _Py_CheckRecursiveCallPy(
     return 0;
 }
 
-static inline int _Py_EnterRecursivePy(PyThreadState *tstate) {
-    return (tstate->py_recursion_remaining-- <= 0) &&
-        _Py_CheckRecursiveCallPy(tstate);
-}
-
-
-static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
-    tstate->py_recursion_remaining++;
-}
-
 
 /* Disable unused label warnings.  They are handy for debugging, even
    if computed gotos aren't used. */
@@ -777,21 +731,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
 
     _Py_CODEUNIT *next_instr;
     PyObject **stack_pointer;
-
-/* Sets the above local variables from the frame */
-#define SET_LOCALS_FROM_FRAME() \
-    assert(_PyInterpreterFrame_LASTI(frame) >= -1); \
-    /* Jump back to the last instruction executed... */ \
-    next_instr = frame->prev_instr + 1; \
-    stack_pointer = _PyFrame_GetStackPointer(frame); \
-    /* Set stackdepth to -1. \
-        Update when returning or calling trace function. \
-        Having stackdepth <= 0 ensures that invalid \
-        values are not visible to the cycle GC. \
-        We choose -1 rather than 0 to assist debugging. \
-        */ \
-    frame->stacktop = -1;
-
 
 start_frame:
     if (_Py_EnterRecursivePy(tstate)) {
