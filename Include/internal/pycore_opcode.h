@@ -51,6 +51,7 @@ const uint8_t _PyOpcode_Caches[256] = {
     [LOAD_GLOBAL] = 4,
     [BINARY_OP] = 1,
     [SEND] = 1,
+    [JUMP_BACKWARD] = 10,
     [CALL] = 4,
 };
 

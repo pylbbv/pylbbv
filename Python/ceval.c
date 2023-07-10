@@ -725,8 +725,6 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _PyInterpreterFrame  entry_frame;
     PyObject *kwnames = NULL; // Borrowed reference. Reset by CALL instructions.
 
-    char bb_test = BB_TEST(0, 0);
-
     /* WARNING: Because the _PyCFrame lives on the C stack,
      * but can be accessed from a heap allocated object (tstate)
      * strict stack discipline must be maintained.
@@ -752,6 +750,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     entry_frame.owner = FRAME_OWNED_BY_CSTACK;
     entry_frame.yield_offset = 0;
     entry_frame.is_tier2 = false;
+    entry_frame.bb_test = BB_TEST(0, 0);
     /* Push frame */
     entry_frame.previous = prev_cframe->current_frame;
     frame->previous = &entry_frame;

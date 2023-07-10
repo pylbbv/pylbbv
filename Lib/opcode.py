@@ -446,8 +446,17 @@ _cache_format = {
     },
     "BB_BRANCH" : {
         "bb_id": 1,
-        "forward_jumpby": 1
+        "forward_jumpby": 1,
+        "consequent_trace": 4,
+        "alternative_trace": 4,
     },
+    # Keep in sync with BB_BRANCH for simplicity's sake
+    "JUMP_BACKWARD": {
+        "bb_id": 1,
+        "forward_jumpby": 1,
+        "consequent_trace": 4,
+        "alternative_trace": 4,
+    }
 }
 
 _inline_cache_entries = [

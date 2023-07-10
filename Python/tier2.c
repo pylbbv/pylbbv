@@ -14,7 +14,7 @@
 // Max typed version basic blocks per basic block
 #define MAX_BB_VERSIONS 10
 
-#define OVERALLOCATE_FACTOR 7
+#define OVERALLOCATE_FACTOR 20
 
 
 /* Dummy types used by the types propagator */
@@ -1334,8 +1334,10 @@ emit_logical_branch(_PyTier2TypeContext *type_context, _Py_CODEUNIT *write_curr,
         write_curr->op.arg = oparg & 0xFF;
         write_curr++;
         _PyBBBranchCache *cache = (_PyBBBranchCache *)write_curr;
-        write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_BB_BRANCH);
+        write_curr = emit_cache_entries(write_curr, INLINE_CACHE_ENTRIES_JUMP_BACKWARD);
         write_bb_id(cache, bb_id, false);
+        write_curr->op.code = END_FOR;
+        write_curr++;
         return write_curr;
     }
     // FOR_ITER is also a special jump
@@ -1879,7 +1881,7 @@ _PyTier2_Code_DetectAndEmitBB(
             // Assert that we are the start of a BB
             assert(t2_start == write_i);
 
-            if (_PyOpcode_Deopt[(curr - 1)->op.code] == JUMP_BACKWARD) {
+            if (_PyOpcode_Deopt[(curr - 1 - INLINE_CACHE_ENTRIES_JUMP_BACKWARD)->op.code] == JUMP_BACKWARD) {
                 // If this follows a JUMP_BACKWARDS,
                 // Though we want to emit this, we don't want to start execution from END_FOR.
                 // So we tell the BB to skip over it.
@@ -2371,7 +2373,7 @@ _PyCode_Tier2FillJumpTargets(PyCodeObject *co)
     dispatch_same_oparg:
         if (IS_JUMP_BACKWARDS_OPCODE(opcode)) {
             // + 1 because it's calculated from nextinstr (see JUMPBY in ceval.c)
-            _Py_CODEUNIT *target = curr + 1 - oparg;
+            _Py_CODEUNIT *target = curr + 1 - oparg + INLINE_CACHE_ENTRIES_JUMP_BACKWARD;
 #if BB_DEBUG
             fprintf(stderr, "jump target opcode is %d\n", _Py_OPCODE(*target));
 #endif
@@ -2710,7 +2712,7 @@ _PyTier2_GenerateNextBBMetaWithTypeContext(
 #endif
         // Propagate the type guard information.
         uint8_t guard_opcode = prev_type_guard->op.code;
-        if (BB_TEST_IS_SUCCESSOR(bb_flag)) {
+        if (BB_TEST_IS_SUCCESSOR(frame)) {
             type_propagate(guard_opcode,
                 prev_type_guard->op.arg, type_context_copy, NULL);
         }
@@ -3162,7 +3164,7 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
  * 
  * BB_TEST_POP_IF_TRUE
  * BB_JUMP_IF_FLAG_SET
- * CACHE (will be converted to EXTENDED_ARGS if we need a bigger jump)
+ * CACHE
  * 
  * Backwards jumps are handled by another function.
  * 
@@ -3199,21 +3201,21 @@ _PyTier2_RewriteForwardJump(_Py_CODEUNIT *bb_branch, _Py_CODEUNIT *target)
 
 
 /**
- * @brief Rewrites a BB_JUMP_BACKWARD_LAZY to a more efficient standard BACKWARD_JUMP.
+ * @brief Rewrites a BB_dD_LAZY to a more efficient standard BACKWARD_JUMP.
  *
  * Before:
  * 
  * EXTENDED_ARG/NOP
  * BB_JUMP_BACKWARD_LAZY
- * CACHE
- * CACHE
+ * CACHE xn
+ * END_FOR
  * 
  * After:
  * 
  * EXTENDED_ARG (if needed, else NOP)
  * JUMP_BACKWARD_QUICK
+ * CACHE xn
  * END_FOR
- * NOP
  * 
  * @param jump_backward_lazy The backwards jump instruction.
  * @param target The target we're jumping to.
@@ -3233,7 +3235,7 @@ _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *tar
     // Is backwards jump.
     bool is_backwards_jump = oparg < 0;
     if (is_backwards_jump) {
-        oparg = -oparg;
+        oparg = -oparg+INLINE_CACHE_ENTRIES_JUMP_BACKWARD;
     }
     assert(oparg > 0);
     assert(oparg <= 0xFFFF);
@@ -3253,11 +3255,6 @@ _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *tar
         ? JUMP_BACKWARD_QUICK
         : JUMP_FORWARD);
     write_curr->op.arg = oparg & 0xFF;
-    write_curr++;
-    _py_set_opcode(write_curr, END_FOR);
-    write_curr++;
-    write_curr->op.code = NOP;
-    write_curr++;
     return;
 }
 
