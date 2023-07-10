@@ -497,7 +497,7 @@
             PyObject *unboxed_float;
             assert(cframe.use_tracing == 0);
             char is_successor = PyFloat_CheckExact(maybe_float);
-            bb_test = BB_TEST(is_successor, 0);
+            frame->bb_test = BB_TEST(is_successor, 0);
 
             if (is_successor) {
                 unboxed_float = *((PyObject **)(&(((PyFloatObject *)maybe_float)->ob_fval)));
@@ -582,7 +582,7 @@
             PyObject *maybe_int = stack_pointer[-(1 + oparg)];
             assert(cframe.use_tracing == 0);
             char is_successor = PyLong_CheckExact(maybe_int);
-            bb_test = BB_TEST(is_successor, 0);
+            frame->bb_test = BB_TEST(is_successor, 0);
             DISPATCH();
         }
 
@@ -708,7 +708,7 @@
         TARGET(CHECK_LIST) {
             PyObject *container = stack_pointer[-(1 + oparg)];
             char is_successor = PyList_CheckExact(container);
-            bb_test = BB_TEST(is_successor, 0);
+            frame->bb_test = BB_TEST(is_successor, 0);
             DISPATCH();
         }
 
@@ -2594,8 +2594,9 @@
 
         TARGET(JUMP_BACKWARD_QUICK) {
             PREDICTED(JUMP_BACKWARD_QUICK);
-            assert(oparg < INSTR_OFFSET());
+            assert((oparg - INLINE_CACHE_ENTRIES_JUMP_BACKWARD) < INSTR_OFFSET());
             JUMPBY(-oparg);
+            next_instr += 10;
             CHECK_EVAL_BREAKER();
             DISPATCH();
         }
@@ -2628,21 +2629,21 @@
             PyObject *cond = stack_pointer[-1];
             if (Py_IsTrue(cond)) {
                 _Py_DECREF_NO_DEALLOC(cond);
-                bb_test = BB_TEST(1, 0);
+                frame->bb_test = BB_TEST(1, 0);
             }
             else if (Py_IsFalse(cond)) {
                 _Py_DECREF_NO_DEALLOC(cond);
-                bb_test = BB_TEST(0, 0);
+                frame->bb_test = BB_TEST(0, 0);
             }
             else {
                 int err = PyObject_IsTrue(cond);
                 Py_DECREF(cond);
                 if (err == 0) {
-                    bb_test = BB_TEST(0, 0);
+                    frame->bb_test = BB_TEST(0, 0);
                 }
                 else {
                     if (err < 0) goto pop_1_error;
-                    bb_test = BB_TEST(1, 0);
+                    frame->bb_test = BB_TEST(1, 0);
                 }
             }
             STACK_SHRINK(1);
@@ -2676,21 +2677,21 @@
             PyObject *cond = stack_pointer[-1];
             if (Py_IsFalse(cond)) {
                 _Py_DECREF_NO_DEALLOC(cond);
-                bb_test = BB_TEST(1, 0);
+                frame->bb_test = BB_TEST(1, 0);
             }
             else if (Py_IsTrue(cond)) {
                 _Py_DECREF_NO_DEALLOC(cond);
-                bb_test = BB_TEST(0, 0);
+                frame->bb_test = BB_TEST(0, 0);
             }
             else {
                 int err = PyObject_IsTrue(cond);
                 Py_DECREF(cond);
                 if (err > 0) {
-                    bb_test = BB_TEST(0, 0);
+                    frame->bb_test = BB_TEST(0, 0);
                 }
                 else {
                     if (err < 0) goto pop_1_error;
-                    bb_test = BB_TEST(1, 0);
+                    frame->bb_test = BB_TEST(1, 0);
                 }
             }
             STACK_SHRINK(1);
@@ -2714,11 +2715,11 @@
             PyObject *value = stack_pointer[-1];
             if (!Py_IsNone(value)) {
                 Py_DECREF(value);
-                bb_test = BB_TEST(0, 0);
+                frame->bb_test = BB_TEST(0, 0);
             }
             else {
                 _Py_DECREF_NO_DEALLOC(value);
-                bb_test = BB_TEST(1, 0);
+                frame->bb_test = BB_TEST(1, 0);
             }
             STACK_SHRINK(1);
             DISPATCH();
@@ -2741,11 +2742,11 @@
             PyObject *value = stack_pointer[-1];
             if (Py_IsNone(value)) {
                 Py_DECREF(value);
-                bb_test = BB_TEST(0, 0);
+                frame->bb_test = BB_TEST(0, 0);
             }
             else {
                 _Py_DECREF_NO_DEALLOC(value);
-                bb_test = BB_TEST(1, 0);
+                frame->bb_test = BB_TEST(1, 0);
             }
             STACK_SHRINK(1);
             DISPATCH();
@@ -2947,11 +2948,11 @@
                 /* iterator ended normally */
                 Py_DECREF(iter);
                 STACK_SHRINK(1);
-                bb_test = BB_TEST(0, 2);
+                frame->bb_test = BB_TEST(0, 2);
                 JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER);
                 DISPATCH();
             }
-            bb_test = BB_TEST(1, 0);
+            frame->bb_test = BB_TEST(1, 0);
             STACK_GROW(1);
             stack_pointer[-1] = next;
             next_instr += 1;
@@ -3005,12 +3006,12 @@
             }
             Py_DECREF(iter);
             STACK_SHRINK(1);
-            bb_test = BB_TEST(0, 2);
+            frame->bb_test = BB_TEST(0, 2);
             JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER);
             DISPATCH();
         end_bb_iter_list:
             // Common case: no jump, leave it to the code generator
-            bb_test = BB_TEST(1, 0);
+            frame->bb_test = BB_TEST(1, 0);
             STACK_GROW(1);
             stack_pointer[-1] = next;
             next_instr += 1;
@@ -3064,12 +3065,12 @@
             }
             Py_DECREF(iter);
             STACK_SHRINK(1);
-            bb_test = BB_TEST(0, 2);
+            frame->bb_test = BB_TEST(0, 2);
             JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER);
             DISPATCH();
         end_test_iter_tuple:
             // Common case: no jump, leave it to the code generator
-            bb_test = BB_TEST(1, 0);
+            frame->bb_test = BB_TEST(1, 0);
             STACK_GROW(1);
             stack_pointer[-1] = next;
             next_instr += 1;
@@ -3113,7 +3114,7 @@
             if (r->len <= 0) {
                 STACK_SHRINK(1);
                 Py_DECREF(r);
-                bb_test = BB_TEST(0, 2);
+                frame->bb_test = BB_TEST(0, 2);
                 JUMPBY(INLINE_CACHE_ENTRIES_FOR_ITER);
                 DISPATCH();
             }
@@ -3124,7 +3125,7 @@
             if (next == NULL) {
                 goto error;
             }
-            bb_test = BB_TEST(1, 0);
+            frame->bb_test = BB_TEST(1, 0);
             STACK_GROW(1);
             stack_pointer[-1] = next;
             next_instr += 1;
@@ -4266,13 +4267,13 @@
             _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             _Py_CODEUNIT *tier1_fallback = NULL;
-            if (BB_TEST_IS_SUCCESSOR(bb_test)) {
+            if (BB_TEST_IS_SUCCESSOR(frame)) {
                 // Rewrite self
                 _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
                 // Generate consequent.
                 t2_nextinstr = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
-                    0, &tier1_fallback, bb_test);
+                    0, &tier1_fallback, frame->bb_test);
                 if (t2_nextinstr == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
@@ -4285,7 +4286,7 @@
                 // Generate alternative.
                 t2_nextinstr = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
-                    oparg, &tier1_fallback, bb_test);
+                    oparg, &tier1_fallback, frame->bb_test);
                 if (t2_nextinstr == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback + oparg;
@@ -4300,7 +4301,7 @@
         }
 
         TARGET(BB_BRANCH_IF_FLAG_UNSET) {
-            if (!BB_TEST_IS_SUCCESSOR(bb_test)) {
+            if (!BB_TEST_IS_SUCCESSOR(frame)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
                 _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
@@ -4308,7 +4309,7 @@
 
                 t2_nextinstr = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
-                    oparg, &tier1_fallback, bb_test);
+                    oparg, &tier1_fallback, frame->bb_test);
                 if (t2_nextinstr == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
@@ -4325,7 +4326,7 @@
         }
 
         TARGET(BB_JUMP_IF_FLAG_UNSET) {
-            if (!BB_TEST_IS_SUCCESSOR(bb_test)) {
+            if (!BB_TEST_IS_SUCCESSOR(frame)) {
                 JUMPBY(oparg);
                 DISPATCH();
             }
@@ -4335,7 +4336,7 @@
         }
 
         TARGET(BB_BRANCH_IF_FLAG_SET) {
-            if (BB_TEST_IS_SUCCESSOR(bb_test)) {
+            if (BB_TEST_IS_SUCCESSOR(frame)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
                 _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
@@ -4343,7 +4344,7 @@
                 t2_nextinstr = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                 //  v   We generate from the tier1 consequent BB, so offset (oparg) is 0.
-                    0, &tier1_fallback, bb_test);
+                    0, &tier1_fallback, frame->bb_test);
                 if (t2_nextinstr == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
@@ -4360,7 +4361,7 @@
         }
 
         TARGET(BB_JUMP_IF_FLAG_SET) {
-            if (BB_TEST_IS_SUCCESSOR(bb_test)) {
+            if (BB_TEST_IS_SUCCESSOR(frame)) {
                 JUMPBY(oparg);
                 DISPATCH();
             }

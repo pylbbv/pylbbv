@@ -835,7 +835,7 @@ _PyOpcode_num_pushed(int opcode, int oparg, bool jump) {
 }
 #endif
 
-enum InstructionFormat { INSTR_FMT_IB, INSTR_FMT_IBC, INSTR_FMT_IBC0, INSTR_FMT_IBC000, INSTR_FMT_IBC00000000, INSTR_FMT_IBIB, INSTR_FMT_IX, INSTR_FMT_IXC, INSTR_FMT_IXC0, INSTR_FMT_IXC000 };
+enum InstructionFormat { INSTR_FMT_IB, INSTR_FMT_IBC, INSTR_FMT_IBC000, INSTR_FMT_IBC00000000, INSTR_FMT_IBC000000000, INSTR_FMT_IBIB, INSTR_FMT_IX, INSTR_FMT_IXC, INSTR_FMT_IXC000, INSTR_FMT_IXC000000000 };
 struct opcode_metadata {
     bool valid_entry;
     enum InstructionFormat instr_format;
@@ -977,8 +977,8 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[256] = {
     [IMPORT_NAME] = { true, INSTR_FMT_IB },
     [IMPORT_FROM] = { true, INSTR_FMT_IB },
     [JUMP_FORWARD] = { true, INSTR_FMT_IB },
-    [JUMP_BACKWARD] = { true, INSTR_FMT_IX },
-    [JUMP_BACKWARD_QUICK] = { true, INSTR_FMT_IB },
+    [JUMP_BACKWARD] = { true, INSTR_FMT_IXC000000000 },
+    [JUMP_BACKWARD_QUICK] = { true, INSTR_FMT_IBC000000000 },
     [POP_JUMP_IF_FALSE] = { true, INSTR_FMT_IB },
     [BB_TEST_POP_IF_FALSE] = { true, INSTR_FMT_IX },
     [POP_JUMP_IF_TRUE] = { true, INSTR_FMT_IB },
@@ -1041,11 +1041,11 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[256] = {
     [SWAP] = { true, INSTR_FMT_IB },
     [EXTENDED_ARG] = { true, INSTR_FMT_IB },
     [CACHE] = { true, INSTR_FMT_IX },
-    [BB_BRANCH] = { true, INSTR_FMT_IBC0 },
-    [BB_BRANCH_IF_FLAG_UNSET] = { true, INSTR_FMT_IBC0 },
-    [BB_JUMP_IF_FLAG_UNSET] = { true, INSTR_FMT_IBC0 },
-    [BB_BRANCH_IF_FLAG_SET] = { true, INSTR_FMT_IXC0 },
-    [BB_JUMP_IF_FLAG_SET] = { true, INSTR_FMT_IBC0 },
-    [BB_JUMP_BACKWARD_LAZY] = { true, INSTR_FMT_IB },
+    [BB_BRANCH] = { true, INSTR_FMT_IBC000000000 },
+    [BB_BRANCH_IF_FLAG_UNSET] = { true, INSTR_FMT_IBC000000000 },
+    [BB_JUMP_IF_FLAG_UNSET] = { true, INSTR_FMT_IBC000000000 },
+    [BB_BRANCH_IF_FLAG_SET] = { true, INSTR_FMT_IXC000000000 },
+    [BB_JUMP_IF_FLAG_SET] = { true, INSTR_FMT_IBC000000000 },
+    [BB_JUMP_BACKWARD_LAZY] = { true, INSTR_FMT_IBC000000000 },
 };
 #endif
