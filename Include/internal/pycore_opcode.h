@@ -414,14 +414,9 @@ static const char *const _PyOpcode_OpName[263] = {
     [CALL_INTRINSIC_2] = "CALL_INTRINSIC_2",
     [BB_BRANCH_IF_FLAG_UNSET] = "BB_BRANCH_IF_FLAG_UNSET",
     [BB_BRANCH] = "BB_BRANCH",
-    [BB_BRANCH_IF_FLAG_UNSET] = "BB_BRANCH_IF_FLAG_UNSET",
-    [BB_BRANCH_IF_FLAG_SET] = "BB_BRANCH_IF_FLAG_SET",
     [BB_JUMP_IF_FLAG_UNSET] = "BB_JUMP_IF_FLAG_UNSET",
     [BB_JUMP_IF_FLAG_SET] = "BB_JUMP_IF_FLAG_SET",
     [BB_TEST_ITER] = "BB_TEST_ITER",
-    [BB_TEST_ITER_RANGE] = "BB_TEST_ITER_RANGE",
-    [BB_TEST_ITER_LIST] = "BB_TEST_ITER_LIST",
-    [BB_TEST_ITER_TUPLE] = "BB_TEST_ITER_TUPLE",
     [BB_TEST_POP_IF_FALSE] = "BB_TEST_POP_IF_FALSE",
     [BB_TEST_POP_IF_TRUE] = "BB_TEST_POP_IF_TRUE",
     [BB_TEST_POP_IF_NOT_NONE] = "BB_TEST_POP_IF_NOT_NONE",
@@ -444,6 +439,11 @@ static const char *const _PyOpcode_OpName[263] = {
     [STORE_FAST_BOXED_UNBOXED] = "STORE_FAST_BOXED_UNBOXED",
     [STORE_FAST_UNBOXED_BOXED] = "STORE_FAST_UNBOXED_BOXED",
     [STORE_FAST_UNBOXED_UNBOXED] = "STORE_FAST_UNBOXED_UNBOXED",
+    [202] = "<202>",
+    [203] = "<203>",
+    [204] = "<204>",
+    [205] = "<205>",
+    [206] = "<206>",
     [207] = "<207>",
     [208] = "<208>",
     [209] = "<209>",
@@ -505,6 +505,11 @@ static const char *const _PyOpcode_OpName[263] = {
 
 
 #define EXTRA_CASES \
+    case 202: \
+    case 203: \
+    case 204: \
+    case 205: \
+    case 206: \
     case 207: \
     case 208: \
     case 209: \
