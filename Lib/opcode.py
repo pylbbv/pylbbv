@@ -479,8 +479,8 @@ _uops = [
     'BB_BRANCH', # When both exits have not been generated.
     # The BB_BRANCH transitions to one of these two.
     # This happens when the fall through is generated, but not the other branch.
-    'BB_BRANCH_IF_FLAG_UNSET',  # When alternate exit is not yet generated.
-    'BB_BRANCH_IF_FLAG_SET',    # When successor exit is not yet generated.
+    # Duplicated in the specialised # 'BB_BRANCH_IF_FLAG_UNSET',  # When alternate exit is not yet generated.
+    # Duplicated in the specialised # 'BB_BRANCH_IF_FLAG_SET',    # When successor exit is not yet generated.
     # When both edges are generated
     'BB_JUMP_IF_FLAG_UNSET',
     'BB_JUMP_IF_FLAG_SET',
@@ -490,9 +490,9 @@ _uops = [
     # These tests correspond to the jump instructions
     # FOR_ITER's null (iterator) check
     'BB_TEST_ITER',
-    'BB_TEST_ITER_RANGE',
-    'BB_TEST_ITER_LIST',
-    'BB_TEST_ITER_TUPLE',
+    # Duplicated in the specialised # 'BB_TEST_ITER_RANGE',
+    # Duplicated in the specialised # 'BB_TEST_ITER_LIST',
+    # Duplicated in the specialised # 'BB_TEST_ITER_TUPLE',
     # POP_JUMP_IF_FALSE, POP_JUMP_IF_TRUE
     'BB_TEST_POP_IF_FALSE',
     'BB_TEST_POP_IF_TRUE',
