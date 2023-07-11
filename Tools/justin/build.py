@@ -614,6 +614,11 @@ class Compiler:
             "BB_BRANCH_IF_FLAG_SET",
             "BB_JUMP_IF_FLAG_SET",
             "BB_JUMP_BACKWARD_LAZY",
+            "BB_TEST_ITER",
+            "BB_TEST_ITER_LIST",
+            "BB_TEST_ITER_TUPLE",            
+            "BB_TEST_ITER_RANGE",
+
 
             # Tier 2 unsupported
             "SEND",
