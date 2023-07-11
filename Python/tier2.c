@@ -9,6 +9,7 @@
 
 #include "opcode.h"
 
+
 #define BB_DEBUG 0
 #define TYPEPROP_DEBUG 0
 // Max typed version basic blocks per basic block
@@ -1835,9 +1836,8 @@ _PyTier2_Code_DetectAndEmitBB(
     // 2. If there's a type guard.
     bool needs_guard = 0;
 
-    _PyTier2BBMetadata *meta = NULL;
-    _PyTier2BBMetadata *temp_meta = NULL;
-    _PyTier2BBMetadata *jump_end_meta = NULL;
+    static _PyTier2BBMetadata *metas[256] = {NULL};
+    int metas_size = -1;
 
     _PyTier2Info *t2_info = co->_tier2_info;
     PyObject *consts = co->co_consts;
@@ -2138,13 +2138,10 @@ start_virtual_bb:
                 // Add the basic block to the jump ids
                 assert(start_type_context_copy != NULL);
                 assert(virtual_tier1_start != NULL);
-                if (add_metadata_to_jump_2d_array(t2_info, meta,
+                assert(metas_size >= 0);
+                if (add_metadata_to_jump_2d_array(t2_info, metas[metas_size],
                     backwards_jump_target_offset, start_type_context_copy,
                     virtual_tier1_start) < 0) {
-                    PyMem_Free(meta);
-                    if (meta != temp_meta) {
-                        PyMem_Free(temp_meta);
-                    }
                     _PyTier2TypeContext_Free(starting_type_context);
                     return NULL;
                 }
@@ -2169,11 +2166,11 @@ check_backwards_jump_target:
                 if (type_context_copy == NULL) {
                     return NULL;
                 }
-                // We can't unconditionally overwrite the first bb
-                // because we might have multiple jump targets in a single BB.
-                meta = meta != NULL ? meta : _PyTier2_AllocateBBMetaData(co,
+                metas_size++;
+                assert(metas_size <= 256);
+                metas[metas_size] = _PyTier2_AllocateBBMetaData(co,
                     t2_start, _PyCode_CODE(co) + i, type_context_copy);
-                if (meta == NULL) {
+                if (metas[metas_size] == NULL) {
                     _PyTier2TypeContext_Free(type_context_copy);
                     return NULL;
                 }
@@ -2248,19 +2245,15 @@ check_backwards_jump_target:
 
     }
 end:
-    // Create the tier 2 BB
-
-    temp_meta = _PyTier2_AllocateBBMetaData(co, t2_start,
+    // Create the final tier 2 BB
+    metas_size++;
+    assert(metas_size <= 256);
+    metas[metas_size] = _PyTier2_AllocateBBMetaData(co, t2_start,
         // + 1 because we want to start with the NEXT instruction for the scan
         _PyCode_CODE(co) + i + 1, starting_type_context);
-    if (temp_meta == NULL) {
+    if (metas[metas_size] == NULL) {
         _PyTier2TypeContext_Free(starting_type_context);
         return NULL;
-    }
-    // We need to return the first block to enter into. If there is already a block generated
-    // before us, then we use that instead of the most recent block.
-    if (meta == NULL) {
-        meta = temp_meta;
     }
     // Tell BB space the number of bytes we wrote.
     // -1 becaues write_i points to the instruction AFTER the end
@@ -2269,7 +2262,9 @@ end:
     fprintf(stderr, "Generated BB T2 Start: %p, T1 offset: %zu\n", meta->tier2_start,
         meta->tier1_end - _PyCode_CODE(co));
 #endif
-    return meta;
+    // Return the first BB
+    assert(metas_size >= 0);
+    return metas[0];
 
 }
 
