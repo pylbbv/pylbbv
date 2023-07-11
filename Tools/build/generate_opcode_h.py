@@ -102,6 +102,7 @@ def main(opcode_py, outfile='Include/opcode.h', internaloutfile='Include/interna
     for name in opcode['_specialized_instructions']:
         while used[next_op]:
             next_op += 1
+        assert name not in opname_including_specialized
         specialized_opmap[name] = next_op
         opname_including_specialized[next_op] = name
         used[next_op] = True
@@ -117,6 +118,7 @@ def main(opcode_py, outfile='Include/opcode.h', internaloutfile='Include/interna
     for name in opcode['_uops']:
         while used[next_op]:
             next_op += 1
+        assert name not in opname_including_specialized
         uop_opmap[name] = next_op
         opname_including_specialized[next_op] = name
         used[next_op] = True
