@@ -117,5 +117,5 @@ jobs:
           choco install llvm --allow-downgrade --version ${{ matrix.llvm }}
           ./PCbuild/build ${{ matrix.debug && '-d' || '--pgo' }} -p ${{ matrix.windows_platform }}
       # ./PCbuild/rt${{ matrix.debug && ' -d' || '' }} -p ${{ matrix.windows_platform }} -q -j0 -wW          
-        name: Tests
+      - name: Tests
         run: .\python.bat tier2_test.py
