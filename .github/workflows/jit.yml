@@ -127,7 +127,7 @@ jobs:
       - name: Windows
         if: runner.os == 'Windows'
         run: |
-          ./PCbuild/build ${{ matrix.debug && '-d' || '--pgo' }} -p ${{ matrix.windows_platform }}
+          ./PCbuild/build ${{ matrix.debug && '-d' }} -p ${{ matrix.windows_platform }}
       # ./PCbuild/rt${{ matrix.debug && ' -d' || '' }} -p ${{ matrix.windows_platform }} -q -j0 -wW          
       - name: Tests
         run: .\python.bat tier2_test.py
