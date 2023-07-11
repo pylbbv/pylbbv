@@ -846,7 +846,7 @@ extern const struct opcode_metadata _PyOpcode_opcode_metadata[256];
 #else
 const struct opcode_metadata _PyOpcode_opcode_metadata[256] = {
     [NOP] = { true, INSTR_FMT_IX },
-    [RESUME] = { true, INSTR_FMT_IX },
+    [RESUME] = { true, INSTR_FMT_IB },
     [RESUME_QUICK] = { true, INSTR_FMT_IB },
     [LOAD_CLOSURE] = { true, INSTR_FMT_IB },
     [LOAD_FAST_CHECK] = { true, INSTR_FMT_IB },
