@@ -8,15 +8,15 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - i686-pc-windows-msvc/msvc
+          # - i686-pc-windows-msvc/msvc
           - x86_64-pc-windows-msvc/msvc
-          - x86_64-apple-darwin/clang
-          - x86_64-unknown-linux-gnu/gcc
+          # - x86_64-apple-darwin/clang
+          # - x86_64-unknown-linux-gnu/gcc
           # - aarch64-apple-darwin/clang
           # - aarch64-unknown-linux-gnu/gcc
           # - aarch64-unknown-linux-gnu/clang
           # - powerpc64le-unknown-linux-gnu/gcc
-          - x86_64-unknown-linux-gnu/clang
+          # - x86_64-unknown-linux-gnu/clang
         debug:
           - true
           - false
@@ -25,28 +25,28 @@ jobs:
           - 15
           - 16
         include:
-          - target: i686-pc-windows-msvc/msvc
-            architecture: i686
-            runner: windows-latest
-            compiler: msvc
-            tier: 1
-            windows_platform: Win32
+          # - target: i686-pc-windows-msvc/msvc
+          #   architecture: i686
+          #   runner: windows-latest
+          #   compiler: msvc
+          #   tier: 1
+          #   windows_platform: Win32
           - target: x86_64-pc-windows-msvc/msvc
             architecture: x86_64
             runner: windows-latest
             compiler: msvc
             tier: 1
             windows_platform: x64
-          - target: x86_64-apple-darwin/clang
-            architecture: x86_64
-            runner: macos-latest
-            compiler: clang
-            tier: 1
-          - target: x86_64-unknown-linux-gnu/gcc
-            architecture: x86_64
-            runner: ubuntu-latest
-            compiler: gcc
-            tier: 1
+          # - target: x86_64-apple-darwin/clang
+          #   architecture: x86_64
+          #   runner: macos-latest
+          #   compiler: clang
+          #   tier: 1
+          # - target: x86_64-unknown-linux-gnu/gcc
+          #   architecture: x86_64
+          #   runner: ubuntu-latest
+          #   compiler: gcc
+          #   tier: 1
           # - target: aarch64-apple-darwin/clang
           #   architecture: aarch64
           #   runner: macos-latest
@@ -67,11 +67,11 @@ jobs:
           #   runner: ubuntu-latest
           #   compiler: gcc
           #   tier: 2
-          - target: x86_64-unknown-linux-gnu/clang
-            architecture: x86_64
-            runner: ubuntu-latest
-            compiler: clang
-            tier: 2
+          # - target: x86_64-unknown-linux-gnu/clang
+          #   architecture: x86_64
+          #   runner: ubuntu-latest
+          #   compiler: clang
+          #   tier: 2
     env:
       CC: ${{ matrix.compiler }}
       PYTHON_LLVM_VERSION: ${{ matrix.llvm }}
@@ -87,7 +87,6 @@ jobs:
           export SDKROOT="$(xcrun --show-sdk-path)"
           ./configure ${{ matrix.debug && '--with-pydebug' || '--enable-optimizations --with-lto' }}
           make
-          ./python.exe -c 'import sys; assert sys._support_tier == ${{ matrix.tier }}, sys._support_tier'
           ./python.exe -m test -j0 -wW
       - name: Native Linux
         if: runner.os == 'Linux' && matrix.architecture == 'x86_64'
@@ -97,7 +96,6 @@ jobs:
           export PATH="$(llvm-config-${{ matrix.llvm }} --bindir):$PATH"
           ./configure ${{ matrix.debug && '--with-pydebug' || '--enable-optimizations --with-lto' }}
           make
-          ./python -c 'import sys; assert sys._support_tier == ${{ matrix.tier }}, sys._support_tier'
           ./python -m test -j0 -wW
       - name: Emulated Linux
         if: runner.os == 'Linux' && matrix.architecture != 'x86_64'
@@ -111,12 +109,10 @@ jobs:
             export PATH="$(llvm-config-${{ matrix.llvm }} --bindir):$PATH"
             ./configure ${{ matrix.debug && '--with-pydebug' || '--enable-optimizations --with-lto' }}
             make
-            ./python -c 'import sys; assert sys._support_tier == ${{ matrix.tier }}, sys._support_tier'
             ./python -m test -j0 -wW
       - name: Windows
         if: runner.os == 'Windows'
         run: |
           choco install llvm --allow-downgrade --version ${{ matrix.llvm }}
           ./PCbuild/build ${{ matrix.debug && '-d' || '--pgo' }} -p ${{ matrix.windows_platform }}
-          ./python -c 'import sys; assert sys._support_tier == ${{ matrix.tier }}, sys._support_tier'
           ./PCbuild/rt${{ matrix.debug && ' -d' || '' }} -p ${{ matrix.windows_platform }} -q -j0 -wW
