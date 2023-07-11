@@ -1518,7 +1518,7 @@ IS_BACKWARDS_JUMP_TARGET(PyCodeObject *co, _Py_CODEUNIT *curr)
  * @return 1 for error, 0 for success. 
 */
 static inline int
-add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, _PyTier2BBMetadata *meta,
+add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, int target_bb_id,
     int backwards_jump_target, _PyTier2TypeContext *starting_context,
     _Py_CODEUNIT *tier1_start)
 {
@@ -1545,8 +1545,7 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, _PyTier2BBMetadata *meta,
 #if BB_DEBUG
             fprintf(stderr, "Added jump id %d as jump target\n", meta->id);
 #endif
-            t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].id =
-                meta->id;
+            t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].id = target_bb_id;
             t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].start_type_context = starting_context;
             t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].tier1_start = tier1_start;
             found = true;
@@ -2139,7 +2138,7 @@ start_virtual_bb:
                 assert(start_type_context_copy != NULL);
                 assert(virtual_tier1_start != NULL);
                 assert(metas_size >= 0);
-                if (add_metadata_to_jump_2d_array(t2_info, metas[metas_size],
+                if (add_metadata_to_jump_2d_array(t2_info, co->_tier2_info->bb_data_curr,
                     backwards_jump_target_offset, start_type_context_copy,
                     virtual_tier1_start) < 0) {
                     _PyTier2TypeContext_Free(starting_type_context);
