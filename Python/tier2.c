@@ -109,6 +109,7 @@ jit_compile(
     }
     // Nothing to compile...
     if (written == 0) {
+        PyMem_Free(trace);
         return 0;
     }
     assert(written != 0);
