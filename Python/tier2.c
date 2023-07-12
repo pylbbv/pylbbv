@@ -1509,7 +1509,7 @@ IS_BACKWARDS_JUMP_TARGET(PyCodeObject *co, _Py_CODEUNIT *curr)
  * This happens when a BB is a backwards jump target.
  * 
  * @param t2_info Tier 2 info of that code object.
- * @param meta The BB metadata to add.
+ * @param target_bb_id The target bb's id
  * @param backwards_jump_target Offset (in number of codeunits) from start of code object where
  * the backwards jump target is located.
  * 
