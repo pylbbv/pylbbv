@@ -645,6 +645,19 @@ with TestInfo("infer_BINARY_OP to be compatible with smallint"):
     insts = dis.get_instructions(test_typeprop1, tier2=True)
     assert [x.opname for x in insts].count("BINARY_OP_ADD_INT_REST") == 2
 
+with TestInfo("Correct target_bb_id in jump table"):
+    # See https://github.com/pylbbv/pylbbv/issues/43 for more information
+
+    def f(x, l):
+        for i in l:
+            if i:
+                break
+            x+x
+
+    trigger_tier2(f, (1,[False, True],))
+
+    # As long as it doesn't crash, everything's good
+
 print("Regression tests...Done!")
 
 print("Tests completed ^-^")
