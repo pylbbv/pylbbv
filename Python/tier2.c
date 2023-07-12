@@ -100,7 +100,7 @@ jit_compile(
             jump_target_trace_offsets[seen_jump_targets] = written;
             seen_jump_targets++;
         }
-#if defined(JIT_DEBUG) && defined(Py_DEBUG)
+#if (JIT_DEBUG) && defined(Py_DEBUG)
         fprintf(stderr, "JIT: added to trace %s, instr %p\n", _PyOpcode_OpName[curr->op.code], curr);
 #endif
         trace[written] = curr;
@@ -2325,9 +2325,9 @@ check_backwards_jump_target:
         fall_through:
             // These are definitely the end of a basic block.
             if (IS_SCOPE_EXIT_OPCODE(opcode)) {
-                SET_BEFORE_BRANCH();
                 // Emit the scope exit instruction.
                 write_i = emit_scope_exit(write_i, *curr, starting_type_context);
+                SET_BEFORE_BRANCH();
                 END();
             }
 
