@@ -50,7 +50,7 @@ jit_compile(
     _Py_CODEUNIT *before_branch
 )
 {
-#ifdef JIT_DEBUG
+#if JIT_DEBUG
     fprintf(stderr, "JIT: JIT COMPILING TRACE WITH THE FOLLOWING JUMP TARGETS: ");
     for (int x = 0; x < jump_target_count; x++) {
         fprintf(stderr, "%p, ", jump_target_metadata[x]->tier2_start);
