@@ -3286,6 +3286,11 @@ dummy_func(
             Py_UNREACHABLE();
         }
 
+        // Special sentinel to indicate the end of a machine code trace
+        inst(EXIT_TRACE, (--)) {
+            Py_UNREACHABLE();
+        }
+
         // Tier 2 instructions
         // Type propagator assumes this doesn't affect type context
         inst(BB_BRANCH, (unused/10 --)) {

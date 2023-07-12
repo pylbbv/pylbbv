@@ -439,7 +439,7 @@ static const char *const _PyOpcode_OpName[263] = {
     [STORE_FAST_BOXED_UNBOXED] = "STORE_FAST_BOXED_UNBOXED",
     [STORE_FAST_UNBOXED_BOXED] = "STORE_FAST_UNBOXED_BOXED",
     [STORE_FAST_UNBOXED_UNBOXED] = "STORE_FAST_UNBOXED_UNBOXED",
-    [202] = "<202>",
+    [EXIT_TRACE] = "EXIT_TRACE",
     [203] = "<203>",
     [204] = "<204>",
     [205] = "<205>",
@@ -505,7 +505,6 @@ static const char *const _PyOpcode_OpName[263] = {
 
 
 #define EXTRA_CASES \
-    case 202: \
     case 203: \
     case 204: \
     case 205: \

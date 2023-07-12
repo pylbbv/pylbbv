@@ -4267,6 +4267,10 @@
             Py_UNREACHABLE();
         }
 
+        TARGET(EXIT_TRACE) {
+            Py_UNREACHABLE();
+        }
+
         TARGET(BB_BRANCH) {
             _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;

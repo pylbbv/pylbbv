@@ -532,4 +532,7 @@ _uops = [
     # Storing an unboxed value, overwriting an unboxed local.
     'STORE_FAST_UNBOXED_UNBOXED',
     # The traditional STORE_FAST is storing a boxed value, overwriting a boxed local.
+
+    # Tier 2.5
+    'EXIT_TRACE',
 ]

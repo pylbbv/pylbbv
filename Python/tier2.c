@@ -6,17 +6,130 @@
 #include "pycore_pystate.h"
 #include "pycore_long.h"
 #include "stdbool.h"
+#include "pycore_jit.h"
+#include "jit_stencils.h"
 
 #include "opcode.h"
 
 
 #define BB_DEBUG 0
 #define TYPEPROP_DEBUG 0
+#define JIT_DEBUG 0
 // Max typed version basic blocks per basic block
 #define MAX_BB_VERSIONS 10
 
 #define OVERALLOCATE_FACTOR 20
+#define MAX_JUMP_TARGETS_PER_BB 256
 
+static _Py_CODEUNIT EXIT_TRACE_SENTINEL = {
+    .op = {
+        .code = EXIT_TRACE,
+        .arg = 0,
+    }
+};
+
+////////// JIT FUNCTIONS
+
+/**
+ * @brief This function JIT compiles a given starting BB's tier 2 instructions.
+ * Then populates the metadata with the machine code (assuming it is compilable).
+ * 
+ * @param bb The BB to start compiling from.
+ * @param codeunits Total number of code units from the start to trace until.
+ * @param jump_target_metadata BB metadata of the jump targets within this trace.
+ * @param jump_target_count len(jump_target_metadata)
+ * @param before_branch The last code unit in the BB before the branch instruction.
+ * @return 0 on success, -1 on failure
+*/
+int
+jit_compile(
+    _PyTier2BBMetadata *bb,
+    int codeunits,
+    _PyTier2BBMetadata *jump_target_metadata[MAX_JUMP_TARGETS_PER_BB],
+    int jump_target_count,
+    _Py_CODEUNIT *before_branch
+)
+{
+#ifdef JIT_DEBUG
+    fprintf(stderr, "JIT: JIT COMPILING TRACE WITH THE FOLLOWING JUMP TARGETS: ");
+    for (int x = 0; x < jump_target_count; x++) {
+        fprintf(stderr, "%p, ", jump_target_metadata[x]->tier2_start);
+    }
+    fprintf(stderr, "\n");
+#endif
+    int jump_target_trace_offsets[MAX_JUMP_TARGETS_PER_BB] = { 0 };
+    int seen_jump_targets = 0;
+    int codeunits_before_branch = (int)(before_branch - bb->tier2_start);
+    // Prepare the JIT by removing all the CACHE entries. The JIT only takes a nice
+    // instruction array without any of the CACHE entries.
+    _Py_CODEUNIT **trace = PyMem_Malloc(codeunits * sizeof(_Py_CODEUNIT *));
+    if (trace == NULL) {
+        return -1;
+    }
+    int written = 0;
+    for (int i = 0; i < codeunits_before_branch; i++) {
+        _Py_CODEUNIT *curr = bb->tier2_start + i;
+        int caches = _PyOpcode_Caches[_PyOpcode_Deopt[curr->op.code]];
+        if (caches == 0) {
+            // Check one more time to be sure. Might be a tier 2 op with cache.
+            switch (curr->op.code) {
+            case BB_BRANCH:
+            case BB_BRANCH_IF_FLAG_SET:
+            case BB_BRANCH_IF_FLAG_UNSET:
+            case BB_JUMP_IF_FLAG_SET:
+            case BB_JUMP_IF_FLAG_UNSET:
+                caches = INLINE_CACHE_ENTRIES_BB_BRANCH;
+                break;
+            case BB_TEST_ITER:
+            case BB_TEST_ITER_LIST:
+            case BB_TEST_ITER_RANGE:
+            case BB_TEST_ITER_TUPLE:
+                caches = INLINE_CACHE_ENTRIES_FOR_ITER;
+                break;
+            case BB_JUMP_BACKWARD_LAZY:
+                caches = INLINE_CACHE_ENTRIES_JUMP_BACKWARD;
+                break;
+            default:
+                caches = 0;
+                break;
+            }
+        }
+        // Find all offsets of the jump targets in the trace
+        if (seen_jump_targets < jump_target_count &&
+            curr == jump_target_metadata[seen_jump_targets]->tier2_start) {
+            jump_target_trace_offsets[seen_jump_targets] = written;
+            seen_jump_targets++;
+        }
+#if defined(JIT_DEBUG) && defined(Py_DEBUG)
+        fprintf(stderr, "JIT: added to trace %s, instr %p\n", _PyOpcode_OpName[curr->op.code], curr);
+#endif
+        trace[written] = curr;
+        written++;
+        i += caches;
+    }
+    // Nothing to compile...
+    if (written == 0) {
+        return 0;
+    }
+    assert(written != 0);
+    // Write a sentinel EXIT_TRACE to tell it to bail
+    trace[written] = &EXIT_TRACE_SENTINEL;
+    written++;
+    assert(jump_target_trace_offsets[0] == 0);
+    assert(seen_jump_targets <= jump_target_count);
+    /*
+    *This createA memory region of an array of trampoline(entry) stencils, corresponding to each
+    * jump target.If the jump target is uncompilable(e.g.a branch instruction),
+    * it will be left out of this memory region.
+    */
+    unsigned char *entry_points = (unsigned char *)_PyJIT_CompileTrace(written, trace, jump_target_trace_offsets, seen_jump_targets);
+    for (int i = 0; i < seen_jump_targets; i++) {
+        jump_target_metadata[i]->machine_code = (void *)entry_points;
+        entry_points += trampoline_stencil.nbytes;
+    }
+    PyMem_Free(trace);
+    return 0;
+}
 
 /* Dummy types used by the types propagator */
 
@@ -1821,6 +1934,7 @@ _PyTier2_Code_DetectAndEmitBB(
 #define DISPATCH_GOTO() goto dispatch_opcode;
 #define TYPECONST_GET_RAWTYPE(idx) Py_TYPE(PyTuple_GET_ITEM(consts, idx))
 #define GET_CONST(idx) PyTuple_GET_ITEM(consts, idx)
+#define SET_BEFORE_BRANCH() before_branch = write_i - 1;
 #define CHECK_BACKWARDS_JUMP_TARGET() \
     if (!checked_jump_target) { \
     from_another_opcode = true;\
@@ -1835,12 +1949,13 @@ _PyTier2_Code_DetectAndEmitBB(
     // 2. If there's a type guard.
     bool needs_guard = 0;
 
-    static _PyTier2BBMetadata *metas[256] = {NULL};
+    static _PyTier2BBMetadata *metas[MAX_JUMP_TARGETS_PER_BB] = {NULL};
     int metas_size = -1;
 
     _PyTier2Info *t2_info = co->_tier2_info;
     PyObject *consts = co->co_consts;
     _Py_CODEUNIT *t2_start = (_Py_CODEUNIT *)(((char *)bb_space->u_code) + bb_space->water_level);
+    _Py_CODEUNIT *t2_original_start = t2_start;
     _Py_CODEUNIT *write_i = t2_start;
     int tos = -1;
 
@@ -1852,6 +1967,10 @@ _PyTier2_Code_DetectAndEmitBB(
     _Py_CODEUNIT *virtual_tier1_start = NULL;
     bool from_another_opcode = false;
     bool checked_jump_target = false;
+
+    // For JIT compilation
+
+    _Py_CODEUNIT *before_branch = NULL;
 
     // A meta-interpreter for types.
     Py_ssize_t i = (tier1_start - _PyCode_CODE(co));
@@ -2037,6 +2156,7 @@ _PyTier2_Code_DetectAndEmitBB(
         case BINARY_OP:
             CHECK_BACKWARDS_JUMP_TARGET();
             if (oparg == NB_ADD || oparg == NB_SUBTRACT || oparg == NB_MULTIPLY) {
+                SET_BEFORE_BRANCH();
                 // Add operation. Need to check if we can infer types.
                 _Py_CODEUNIT *possible_next = infer_BINARY_OP(t2_start,
                     oparg, &needs_guard,
@@ -2060,6 +2180,7 @@ _PyTier2_Code_DetectAndEmitBB(
             DISPATCH_REBOX(2);
         case BINARY_SUBSCR: {
             CHECK_BACKWARDS_JUMP_TARGET();
+            SET_BEFORE_BRANCH();
             _Py_CODEUNIT *possible_next = infer_BINARY_SUBSCR(
                 t2_start, oparg, &needs_guard,
                 *curr,
@@ -2081,6 +2202,7 @@ _PyTier2_Code_DetectAndEmitBB(
         }
         case STORE_SUBSCR: {
             CHECK_BACKWARDS_JUMP_TARGET();
+            SET_BEFORE_BRANCH();
             _Py_CODEUNIT *possible_next = infer_BINARY_SUBSCR(
                 t2_start, oparg, &needs_guard,
                 *curr,
@@ -2166,7 +2288,7 @@ check_backwards_jump_target:
                     return NULL;
                 }
                 metas_size++;
-                assert(metas_size <= 256);
+                assert(metas_size <= MAX_JUMP_TARGETS_PER_BB);
                 metas[metas_size] = _PyTier2_AllocateBBMetaData(co,
                     t2_start, _PyCode_CODE(co) + i, type_context_copy);
                 if (metas[metas_size] == NULL) {
@@ -2202,6 +2324,7 @@ check_backwards_jump_target:
         fall_through:
             // These are definitely the end of a basic block.
             if (IS_SCOPE_EXIT_OPCODE(opcode)) {
+                SET_BEFORE_BRANCH();
                 // Emit the scope exit instruction.
                 write_i = emit_scope_exit(write_i, *curr, starting_type_context);
                 END();
@@ -2221,6 +2344,7 @@ check_backwards_jump_target:
                     JUMPBY(oparg);
                     continue;
                 }
+                SET_BEFORE_BRANCH();
                 // Get the BB ID without incrementing it.
                 // AllocateBBMetaData will increment.
                 write_i = emit_logical_branch(starting_type_context, write_i, *curr,
@@ -2246,7 +2370,7 @@ check_backwards_jump_target:
 end:
     // Create the final tier 2 BB
     metas_size++;
-    assert(metas_size <= 256);
+    assert(metas_size <= MAX_JUMP_TARGETS_PER_BB);
     metas[metas_size] = _PyTier2_AllocateBBMetaData(co, t2_start,
         // + 1 because we want to start with the NEXT instruction for the scan
         _PyCode_CODE(co) + i + 1, starting_type_context);
@@ -2255,14 +2379,18 @@ end:
         return NULL;
     }
     // Tell BB space the number of bytes we wrote.
-    // -1 becaues write_i points to the instruction AFTER the end
     bb_space->water_level += (write_i - t2_start) * sizeof(_Py_CODEUNIT);
 #if BB_DEBUG
     fprintf(stderr, "Generated BB T2 Start: %p, T1 offset: %zu\n", meta->tier2_start,
         meta->tier1_end - _PyCode_CODE(co));
 #endif
-    // Return the first BB
     assert(metas_size >= 0);
+    // JIT compile the bb
+    if (jit_compile(metas[0], write_i - t2_original_start, metas,
+        metas_size + 1, before_branch) < 0) {
+        return NULL;
+    }
+    // Return the first BB
     return metas[0];
 
 }

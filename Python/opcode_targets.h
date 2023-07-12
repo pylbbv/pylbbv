@@ -201,7 +201,7 @@ static void *opcode_targets[256] = {
     &&TARGET_STORE_FAST_BOXED_UNBOXED,
     &&TARGET_STORE_FAST_UNBOXED_BOXED,
     &&TARGET_STORE_FAST_UNBOXED_UNBOXED,
-    &&_unknown_opcode,
+    &&TARGET_EXIT_TRACE,
     &&_unknown_opcode,
     &&_unknown_opcode,
     &&_unknown_opcode,

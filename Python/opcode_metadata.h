@@ -401,6 +401,8 @@ _PyOpcode_num_popped(int opcode, int oparg, bool jump) {
             return 0;
         case CACHE:
             return 0;
+        case EXIT_TRACE:
+            return 0;
         case BB_BRANCH:
             return 0;
         case BB_BRANCH_IF_FLAG_UNSET:
@@ -817,6 +819,8 @@ _PyOpcode_num_pushed(int opcode, int oparg, bool jump) {
             return 0;
         case CACHE:
             return 0;
+        case EXIT_TRACE:
+            return 0;
         case BB_BRANCH:
             return 0;
         case BB_BRANCH_IF_FLAG_UNSET:
@@ -1041,6 +1045,7 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[256] = {
     [SWAP] = { true, INSTR_FMT_IB },
     [EXTENDED_ARG] = { true, INSTR_FMT_IB },
     [CACHE] = { true, INSTR_FMT_IX },
+    [EXIT_TRACE] = { true, INSTR_FMT_IX },
     [BB_BRANCH] = { true, INSTR_FMT_IBC000000000 },
     [BB_BRANCH_IF_FLAG_UNSET] = { true, INSTR_FMT_IBC000000000 },
     [BB_JUMP_IF_FLAG_UNSET] = { true, INSTR_FMT_IBC000000000 },

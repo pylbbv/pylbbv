@@ -222,6 +222,7 @@ extern "C" {
 #define STORE_FAST_BOXED_UNBOXED               199
 #define STORE_FAST_UNBOXED_BOXED               200
 #define STORE_FAST_UNBOXED_UNBOXED             201
+#define EXIT_TRACE                             202
 
 #define HAS_ARG(op) ((((op) >= HAVE_ARGUMENT) && (!IS_PSEUDO_OPCODE(op)))\
     || ((op) == JUMP) \

@@ -1026,6 +1026,10 @@
             break;
         }
 
+        TARGET(EXIT_TRACE) {
+            break;
+        }
+
         TARGET(BB_BRANCH) {
             break;
         }
