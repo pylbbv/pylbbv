@@ -2387,7 +2387,7 @@ end:
 #endif
     assert(metas_size >= 0);
     // JIT compile the bb
-    if (jit_compile(metas[0], write_i - t2_original_start, metas,
+    if (jit_compile(metas[0], (int)(write_i - t2_original_start), metas,
         metas_size + 1, before_branch) < 0) {
         return NULL;
     }
