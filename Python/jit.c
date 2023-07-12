@@ -104,8 +104,9 @@ copy_and_patch(unsigned char *memory, const Stencil *stencil, uintptr_t patches[
 // The world's smallest compiler?
 // Make sure to call _PyJIT_Free on the memory when you're done with it!
 _PyJITFunction
-_PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace)
+_PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace, int *jump_target_trace_offsets, int n_jump_targets)
 {
+    assert(size > 0);
     if (!stencils_loaded) {
         stencils_loaded = 1;
         for (size_t i = 0; i < Py_ARRAY_LENGTH(stencils); i++) {
@@ -120,7 +121,8 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace)
         return NULL;
     }
     // First, loop over everything once to find the total compiled size:
-    size_t nbytes = trampoline_stencil.nbytes;
+    // size_t nbytes = trampoline_stencil.nbytes;
+    size_t nbytes = 0;
     for (int i = 0; i < size; i++) {
         _Py_CODEUNIT *instruction = trace[i];
         const Stencil *stencil = &stencils[instruction->op.code];
@@ -135,14 +137,26 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace)
     }
     unsigned char *head = memory;
     uintptr_t patches[] = GET_PATCHES();
-    // First, the trampoline:
-    const Stencil *stencil = &trampoline_stencil;
-    patches[HOLE_base] = (uintptr_t)head;
-    patches[HOLE_continue] = (uintptr_t)head + stencil->nbytes;
-    copy_and_patch(head, stencil, patches);
-    head += stencil->nbytes;
+    //// First, the trampoline:
+    //const Stencil *stencil = &trampoline_stencil;
+    //patches[HOLE_base] = (uintptr_t)head;
+    //patches[HOLE_continue] = (uintptr_t)head + stencil->nbytes;
+    //copy_and_patch(head, stencil, patches);
+    //head += stencil->nbytes;
     // Then, all of the stencils:
+    int seen_jump_targets = 0;
+    // Allocate all the entry point (trampoline) stencils,
+    unsigned char *entry_points = alloc(trampoline_stencil.nbytes * n_jump_targets);
     for (int i = 0; i < size; i++) {
+        // For each jump target, create an entry trampoline.
+        if (i == jump_target_trace_offsets[seen_jump_targets]) {
+            seen_jump_targets++;
+            const Stencil *trampoline = &trampoline_stencil;
+            patches[HOLE_base] = (uintptr_t)entry_points;
+            patches[HOLE_continue] = (uintptr_t)head;
+            copy_and_patch(entry_points, trampoline, patches);
+            entry_points += trampoline->nbytes;
+        }
         _Py_CODEUNIT *instruction = trace[i];
         const Stencil *stencil = &stencils[instruction->op.code];
         patches[HOLE_base] = (uintptr_t)head;
@@ -156,5 +170,6 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace)
     };
     // Wow, done already?
     assert(memory + nbytes == head);
-    return (_PyJITFunction)memory;
+    assert(seen_jump_targets == n_jump_targets);
+    return (_PyJITFunction)entry_points;
 }

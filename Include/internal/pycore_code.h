@@ -20,8 +20,8 @@ typedef struct {
 } _PyBBBranchCache;
 
 #define INLINE_CACHE_ENTRIES_BB_BRANCH CACHE_ENTRIES(_PyBBBranchCache)
-
 #define INLINE_CACHE_ENTRIES_JUMP_BACKWARD CACHE_ENTRIES(_PyBBBranchCache)
+
 
 /* PEP 659
  * Specialization and quickening structs and helper functions
@@ -279,7 +279,7 @@ extern int _PyStaticCode_Init(PyCodeObject *co);
 #define BB_TEST_IS_SUCCESSOR(frame) ((frame->bb_test) >> 4)
 #define BB_TEST_GET_N_REQUIRES_POP(bb_flag) ((bb_flag) & 0b1111)
 
-extern _Py_CODEUNIT *_PyCode_Tier2Warmup(struct _PyInterpreterFrame *,
+PyAPI_FUNC(_Py_CODEUNIT *) _PyCode_Tier2Warmup(struct _PyInterpreterFrame *,
     _Py_CODEUNIT *);
 extern _Py_CODEUNIT *_PyTier2_GenerateNextBB(
     struct _PyInterpreterFrame *frame,

@@ -116,6 +116,8 @@ typedef struct _PyTier2BBMetadata {
     _Py_CODEUNIT *tier2_start;
     // Note, this is the first tier 1 instruction to execute AFTER the BB ends.
     _Py_CODEUNIT *tier1_end;
+    // Tier 2.5 machine code function trampoline pointer
+    void *machine_code;
 } _PyTier2BBMetadata;
 
 // Bump allocator for basic blocks (overallocated)

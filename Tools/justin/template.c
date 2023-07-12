@@ -14,6 +14,7 @@
 #include "pycore_pyerrors.h"
 #include "pycore_range.h"
 #include "pycore_sliceobject.h"
+#include "pycore_code.h"
 
 #include "Python/ceval_macros.h"
 
