@@ -64,6 +64,7 @@
         TARGET(RESUME) {
             if (cframe.use_tracing == 0) {
                 next_instr = _PyCode_Tier2Warmup(frame, next_instr);
+                DISPATCH();
             }
             // GO_TO_INSTRUCTION(RESUME_QUICK);
             assert(frame == cframe.current_frame);
@@ -4272,57 +4273,82 @@
         }
 
         TARGET(BB_BRANCH) {
-            _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            _PyTier2BBMetadata *meta = NULL;
             _Py_CODEUNIT *tier1_fallback = NULL;
             if (BB_TEST_IS_SUCCESSOR(frame)) {
-                // Rewrite self
-                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
                 // Generate consequent.
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     0, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
                     DISPATCH();
                 }
+                // Rewrite self
+                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
+                memcpy(cache->consequent_trace, &meta->machine_code, sizeof(uint64_t));
             }
             else {
-                // Rewrite self
-                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
                 // Generate alternative.
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     oparg, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
-                    next_instr = tier1_fallback + oparg;
+                    next_instr = tier1_fallback;
                     DISPATCH();
                 }
+                // Rewrite self
+                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
+                memcpy(cache->alternative_trace, &meta->machine_code, sizeof(uint64_t));
             }
-            Py_ssize_t forward_jump = t2_nextinstr - next_instr;
+            Py_ssize_t forward_jump = meta->tier2_start - next_instr;
             assert((uint16_t)forward_jump == forward_jump);
             cache->successor_jumpby = (uint16_t)forward_jump;
-            next_instr = t2_nextinstr;
+            next_instr = meta->tier2_start;
+            // Could not generate machine code, fall back to tier 2 instructions.
+            if (meta->machine_code == NULL) {
+                DISPATCH();
+            }
+            // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+            _PyJITReturnCode status = ((_PyJITFunction)(uintptr_t)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
+            frame = cframe.current_frame;
+            next_instr = frame->prev_instr;
+            stack_pointer = _PyFrame_GetStackPointer(frame);
+            switch (status) {
+            case _JUSTIN_RETURN_DEOPT:
+                NEXTOPARG();
+                opcode = _PyOpcode_Deopt[opcode];
+                DISPATCH_GOTO();
+            case _JUSTIN_RETURN_OK:
+                DISPATCH();
+            case _JUSTIN_RETURN_GOTO_ERROR:
+                goto error;
+            }
+            //Py_UNREACHABLE();
+            next_instr += 10;
             DISPATCH();
         }
 
         TARGET(BB_BRANCH_IF_FLAG_UNSET) {
             if (!BB_TEST_IS_SUCCESSOR(frame)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
-                _Py_CODEUNIT *t2_nextinstr = NULL;
+                _PyTier2BBMetadata *meta = NULL;
                 _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
                 _Py_CODEUNIT *tier1_fallback = NULL;
 
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     oparg, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
                 }
-                next_instr = t2_nextinstr;
+                else {
+                    next_instr = meta->tier2_start;
+                }
 
                 // Rewrite self
                 _PyTier2_RewriteForwardJump(curr, next_instr);
@@ -4346,18 +4372,21 @@
         TARGET(BB_BRANCH_IF_FLAG_SET) {
             if (BB_TEST_IS_SUCCESSOR(frame)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
+                _PyTier2BBMetadata *meta = NULL;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
                 _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
                 _Py_CODEUNIT *tier1_fallback = NULL;
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                 //  v   We generate from the tier1 consequent BB, so offset (oparg) is 0.
                     0, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
                 }
-                next_instr = t2_nextinstr;
+                else {
+                    next_instr = meta->tier2_start;
+                }
 
                 // Rewrite self
                 _PyTier2_RewriteForwardJump(curr, next_instr);
