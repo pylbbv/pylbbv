@@ -14,7 +14,7 @@
 
 #define BB_DEBUG 0
 #define TYPEPROP_DEBUG 0
-#define JIT_DEBUG 0
+#define JIT_DEBUG 1
 // Max typed version basic blocks per basic block
 #define MAX_BB_VERSIONS 10
 
@@ -1040,6 +1040,7 @@ allocate_bb_metadata(PyCodeObject *co, _Py_CODEUNIT *tier2_start,
 
     }
 
+    metadata->machine_code = NULL;
     metadata->tier2_start = tier2_start;
     metadata->tier1_end = tier1_end;
     metadata->type_context = type_context;

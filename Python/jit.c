@@ -107,6 +107,7 @@ _PyJITFunction
 _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace, int *jump_target_trace_offsets, int n_jump_targets)
 {
     assert(size > 0);
+    assert(n_jump_targets > 0);
     if (!stencils_loaded) {
         stencils_loaded = 1;
         for (size_t i = 0; i < Py_ARRAY_LENGTH(stencils); i++) {
@@ -137,6 +138,7 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace, int *jump_target_trace_offse
     }
     unsigned char *head = memory;
     uintptr_t patches[] = GET_PATCHES();
+    uintptr_t patches_entrypoint[] = GET_PATCHES();
     //// First, the trampoline:
     //const Stencil *stencil = &trampoline_stencil;
     //patches[HOLE_base] = (uintptr_t)head;
@@ -147,14 +149,15 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace, int *jump_target_trace_offse
     int seen_jump_targets = 0;
     // Allocate all the entry point (trampoline) stencils,
     unsigned char *entry_points = alloc(trampoline_stencil.nbytes * n_jump_targets);
+    unsigned char *first_entry_point = entry_points;
     for (int i = 0; i < size; i++) {
         // For each jump target, create an entry trampoline.
         if (i == jump_target_trace_offsets[seen_jump_targets]) {
             seen_jump_targets++;
             const Stencil *trampoline = &trampoline_stencil;
-            patches[HOLE_base] = (uintptr_t)entry_points;
-            patches[HOLE_continue] = (uintptr_t)head;
-            copy_and_patch(entry_points, trampoline, patches);
+            patches_entrypoint[HOLE_base] = (uintptr_t)entry_points;
+            patches_entrypoint[HOLE_continue] = (uintptr_t)head;
+            copy_and_patch(entry_points, trampoline, patches_entrypoint);
             entry_points += trampoline->nbytes;
         }
         _Py_CODEUNIT *instruction = trace[i];
@@ -171,5 +174,10 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace, int *jump_target_trace_offse
     // Wow, done already?
     assert(memory + nbytes == head);
     assert(seen_jump_targets == n_jump_targets);
-    return (_PyJITFunction)entry_points;
+    assert(first_entry_point + trampoline_stencil.nbytes * n_jump_targets == entry_points);
+#ifdef Py_DEBUG
+    _PyJITFunction temp = (_PyJITFunction)first_entry_point;
+    assert(temp);
+#endif
+    return first_entry_point;
 }

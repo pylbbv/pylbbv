@@ -88,6 +88,7 @@ dummy_func(
         inst(RESUME, (--)) {
             if (cframe.use_tracing == 0) {
                 next_instr = _PyCode_Tier2Warmup(frame, next_instr);
+                DISPATCH();
             }
             // GO_TO_INSTRUCTION(RESUME_QUICK);
             assert(frame == cframe.current_frame);
@@ -3298,8 +3299,6 @@ dummy_func(
             _PyTier2BBMetadata *meta = NULL;
             _Py_CODEUNIT *tier1_fallback = NULL;
             if (BB_TEST_IS_SUCCESSOR(frame)) {
-                // Rewrite self
-                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
                 // Generate consequent.
                 meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
@@ -3309,10 +3308,11 @@ dummy_func(
                     next_instr = tier1_fallback;
                     DISPATCH();
                 }
+                // Rewrite self
+                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
+                memcpy(cache->consequent_trace, &meta->machine_code, sizeof(uint64_t));
             }
             else {
-                // Rewrite self
-                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
                 // Generate alternative.
                 meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
@@ -3322,12 +3322,34 @@ dummy_func(
                     next_instr = tier1_fallback;
                     DISPATCH();
                 }
+                // Rewrite self
+                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
+                memcpy(cache->alternative_trace, &meta->machine_code, sizeof(uint64_t));
             }
             Py_ssize_t forward_jump = meta->tier2_start - next_instr;
             assert((uint16_t)forward_jump == forward_jump);
             cache->successor_jumpby = (uint16_t)forward_jump;
             next_instr = meta->tier2_start;
-            DISPATCH();
+            // Could not generate machine code, fall back to tier 2 instructions.
+            if (meta->machine_code == NULL) {
+                DISPATCH();
+            }
+            // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+            _PyJITReturnCode status = ((_PyJITFunction)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
+            frame = cframe.current_frame;
+            next_instr = frame->prev_instr;
+            stack_pointer = _PyFrame_GetStackPointer(frame);
+            switch (status) {
+            case _JUSTIN_RETURN_DEOPT:
+                NEXTOPARG();
+                opcode = _PyOpcode_Deopt[opcode];
+                DISPATCH_GOTO();
+            case _JUSTIN_RETURN_OK:
+                DISPATCH();
+            case _JUSTIN_RETURN_GOTO_ERROR:
+                goto error;
+            }
+            //Py_UNREACHABLE();
         }
 
         inst(BB_BRANCH_IF_FLAG_UNSET, (unused/10 --)) {
