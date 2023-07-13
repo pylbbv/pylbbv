@@ -179,5 +179,5 @@ _PyJIT_CompileTrace(int size, _Py_CODEUNIT **trace, int *jump_target_trace_offse
     _PyJITFunction temp = (_PyJITFunction)first_entry_point;
     assert(temp);
 #endif
-    return first_entry_point;
+    return (_PyJITFunction)first_entry_point;
 }
