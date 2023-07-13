@@ -14,7 +14,7 @@
 
 #define BB_DEBUG 0
 #define TYPEPROP_DEBUG 0
-#define JIT_DEBUG 1
+#define JIT_DEBUG 0
 // Max typed version basic blocks per basic block
 #define MAX_BB_VERSIONS 10
 

@@ -76,6 +76,8 @@
 #  define DISPATCH_GOTO() goto *opcode_targets[opcode]
 #else
 #  define TARGET(op) case op: TARGET_##op: INSTRUCTION_START(op);
+//#  define TARGET(op) case op: TARGET_##op: fprintf(stderr, "  [+] Executing: Stack: %4d; Offset: %4d; %s:%d;\n", STACK_LEVEL(), INSTR_OFFSET(), #op, oparg);\
+          INSTRUCTION_START(op);
 #  define DISPATCH_GOTO() goto dispatch_opcode
 #endif
 
