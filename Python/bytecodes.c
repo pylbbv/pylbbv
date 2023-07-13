@@ -3294,17 +3294,17 @@ dummy_func(
         // Tier 2 instructions
         // Type propagator assumes this doesn't affect type context
         inst(BB_BRANCH, (unused/10 --)) {
-            _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            _PyTier2BBMetadata *meta = NULL;
             _Py_CODEUNIT *tier1_fallback = NULL;
             if (BB_TEST_IS_SUCCESSOR(frame)) {
                 // Rewrite self
                 _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
                 // Generate consequent.
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     0, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
                     DISPATCH();
@@ -3314,37 +3314,39 @@ dummy_func(
                 // Rewrite self
                 _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
                 // Generate alternative.
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     oparg, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
-                    next_instr = tier1_fallback + oparg;
+                    next_instr = tier1_fallback;
                     DISPATCH();
                 }
             }
-            Py_ssize_t forward_jump = t2_nextinstr - next_instr;
+            Py_ssize_t forward_jump = meta->tier2_start - next_instr;
             assert((uint16_t)forward_jump == forward_jump);
             cache->successor_jumpby = (uint16_t)forward_jump;
-            next_instr = t2_nextinstr;
+            next_instr = meta->tier2_start;
             DISPATCH();
         }
 
         inst(BB_BRANCH_IF_FLAG_UNSET, (unused/10 --)) {
             if (!BB_TEST_IS_SUCCESSOR(frame)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
-                _Py_CODEUNIT *t2_nextinstr = NULL;
+                _PyTier2BBMetadata *meta = NULL;
                 _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
                 _Py_CODEUNIT *tier1_fallback = NULL;
 
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     oparg, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
                 }
-                next_instr = t2_nextinstr;
+                else {
+                    next_instr = meta->tier2_start;
+                }
 
                 // Rewrite self
                 _PyTier2_RewriteForwardJump(curr, next_instr);
@@ -3368,18 +3370,21 @@ dummy_func(
         inst(BB_BRANCH_IF_FLAG_SET, (unused/10 --)) {
             if (BB_TEST_IS_SUCCESSOR(frame)) {
                 _Py_CODEUNIT *curr = next_instr - 1;
+                _PyTier2BBMetadata *meta = NULL;
                 _Py_CODEUNIT *t2_nextinstr = NULL;
                 _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
                 _Py_CODEUNIT *tier1_fallback = NULL;
-                t2_nextinstr = _PyTier2_GenerateNextBB(
+                meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                 //  v   We generate from the tier1 consequent BB, so offset (oparg) is 0.
                     0, &tier1_fallback, frame->bb_test);
-                if (t2_nextinstr == NULL) {
+                if (meta == NULL) {
                     // Fall back to tier 1.
                     next_instr = tier1_fallback;
                 }
-                next_instr = t2_nextinstr;
+                else {
+                    next_instr = meta->tier2_start;
+                }
 
                 // Rewrite self
                 _PyTier2_RewriteForwardJump(curr, next_instr);

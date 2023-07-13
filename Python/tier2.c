@@ -2927,9 +2927,9 @@ _PyTier2_GenerateNextBBMeta(
  * @param jumpby How many instructions to jump by before we start scanning what to generate.
  * @param tier1_fallback Signals the tier 1 instruction to fall back to should generation fail.
  * @param bb_flag Whether to genreate consequent or alternative BB.
- * @return The next tier 2 instruction to execute.
+ * @return The BB's metadata
 */
-_Py_CODEUNIT *
+_PyTier2BBMetadata *
 _PyTier2_GenerateNextBB(
     _PyInterpreterFrame *frame,
     uint16_t bb_id_tagged,
@@ -2948,7 +2948,7 @@ _PyTier2_GenerateNextBB(
     if (metadata == NULL) {
         return NULL;
     }
-    return metadata->tier2_start;
+    return metadata;
 }
 
 /**

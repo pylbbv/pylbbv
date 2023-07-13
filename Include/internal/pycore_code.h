@@ -281,7 +281,7 @@ extern int _PyStaticCode_Init(PyCodeObject *co);
 
 PyAPI_FUNC(_Py_CODEUNIT *) _PyCode_Tier2Warmup(struct _PyInterpreterFrame *,
     _Py_CODEUNIT *);
-extern _Py_CODEUNIT *_PyTier2_GenerateNextBB(
+extern _PyTier2BBMetadata *_PyTier2_GenerateNextBB(
     struct _PyInterpreterFrame *frame,
     uint16_t bb_id_tagged,
     _Py_CODEUNIT *curr_executing_instr,
