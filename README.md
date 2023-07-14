@@ -36,7 +36,7 @@ Type propagation means we can take the type information gathered from a single b
 
 Type check removal means removing type checks in dynamic Python. E.g. if you have ``a + b``, the fast path in Python has to check that these are `int` or `str` or `float`, then if all those fail, rely on a generic `+` function. These type checks incur overhead at runtime. With type information, if we know the types, that we don't need any type checks at all! This means we can eliminate type checks.
 
-We had a rudimentary test script and Doxygen documentation for all our functions to follow common SWE practices.
+We have a rudimentary test script and Doxygen documentation for all our functions to follow common SWE practices.
 
 #### Orbital
 
@@ -45,7 +45,7 @@ This Orbital, we intend to refine pyLBBV. These include but are not limited to:
 - [X] Bug fixing
 - [X] A more advanced type propagator.
 - [X] A more comprehensive test suite with Continuous Integration testing.
-- [ ] A copy and patch JIT compiler. (Not yet implemented!)
+- [X] A copy and patch JIT compiler.
 
 A JIT(Just-in-Time) compiler is just a program that generates native machine executable code at runtime. [Copy and Patch](https://arxiv.org/abs/2011.13127) is a new fast compilation technique developed rather recently. The general idea is that compilation normally requires multiple steps, thus making compilation slow (recall how many steps your SICP meta-circular evaluator needs to execute JS)! Copy and patch makes compilation faster by skipping all the intermediate steps, and just creating "templates" for
 the final code. These "templates" are called *stencils* and they contain *holes*, i.e. missing values. All you have to do for compilation now is to copy and template, and patch in the holes. Thus making it very fast!
@@ -81,6 +81,14 @@ We did a major refactor of our code generation machinery. This makes the code ea
 ![image](./orbital/CI.png)
 - All PRs require review and an approval before merging is allowed. All tests in CI must also pass. This follows standard best practices.
 
+##### Copy and Patch JIT Compiler
+
+The copy-and-patch JIT compiler uses a stencil compiler provided by Brandt Bucher.
+
+- At runtime, each basic block, except the branches (exits) are compiled to machine code.
+- The branches remain as CPython interpreter bytecode, to faciliatate easy branching.
+- Execution thus interleaves between machine code and the interpreter.
+
 ## Architecture Diagram and Design
 
 ```mermaid
@@ -114,7 +122,7 @@ sequenceDiagram
 
 ## What's left for our project
 
-- The Copy and Patch JIT compiler.
+- Just general bugfixing.
 
 ## Evaluation and benchmarks
 
@@ -148,6 +156,8 @@ We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py
 
 ## Build instructions
 
+You should install LLVM 16.0 for your system.
+
 You should follow the official CPython build instructions for your platform.
 https://devguide.python.org/getting-started/setup-building/
 
@@ -170,11 +180,14 @@ After building, run `python tier2_test.py` or `python.bat tier2_test.py` (on Win
 
 In `tier2.c`, two flags can be set to print debug messages:
 ```c
-// Prints codegen debug messages
+// Prints Tier 2 intepreter codegen debug messages
 #define BB_DEBUG 0
 
 // Prints typeprop debug messages
 #define TYPEPROP_DEBUG 0
+
+// Prints JIT codegen debug messages
+#define JIT_DEBUG 0
 ```
 
 ## Addendum
