@@ -3326,7 +3326,7 @@ _PyTier2_RewriteForwardJump(_Py_CODEUNIT *bb_branch, _Py_CODEUNIT *target)
 
 
 /**
- * @brief Rewrites a BB_dD_LAZY to a more efficient standard BACKWARD_JUMP.
+ * @brief Rewrites a BB_JUMP_BACKWARD_LAZY to a more efficient standard BACKWARD_JUMP.
  *
  * Before:
  * 
@@ -3383,7 +3383,7 @@ _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *tar
     write_curr->op.arg = oparg & 0xFF;
     write_curr++;
     _PyBBBranchCache *cache = (_PyBBBranchCache *)write_curr;
-    if (meta != NULL) {
+    if (meta != NULL && is_backwards_jump) {
         write_obj(cache->consequent_trace, (PyObject *)meta->machine_code);
     }
     return;
