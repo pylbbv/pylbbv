@@ -86,7 +86,9 @@ We did a major refactor of our code generation machinery. This makes the code ea
 The copy-and-patch JIT compiler uses a stencil compiler provided by Brandt Bucher.
 
 - At runtime, each basic block, except the branches (exits) are compiled to machine code.
+- If compilation is successful, execution jumps into the machine code rather than the interpreter bytecode.
 - The branches remain as CPython interpreter bytecode, to faciliatate easy branching.
+- Upon encountering a branch, the interpreter leaves the machine code to go back into bytecode.
 - Execution thus interleaves between machine code and the interpreter.
 
 ## Architecture Diagram and Design
