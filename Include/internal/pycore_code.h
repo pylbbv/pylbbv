@@ -288,11 +288,11 @@ extern _PyTier2BBMetadata *_PyTier2_GenerateNextBB(
     int jumpby,
     _Py_CODEUNIT **tier1_fallback,
     char bb_flag);
-extern _Py_CODEUNIT *_PyTier2_LocateJumpBackwardsBB(
+extern _PyTier2BBMetadata *_PyTier2_LocateJumpBackwardsBB(
     struct _PyInterpreterFrame *frame, uint16_t bb_id, int jumpby,
     _Py_CODEUNIT **tier1_fallback, _Py_CODEUNIT *curr, int stacksize);
 extern void _PyTier2_RewriteForwardJump(_Py_CODEUNIT *bb_branch, _Py_CODEUNIT *target);
-extern void _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *target);
+extern void _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *target, _PyTier2BBMetadata *meta);
 void _PyTier2TypeContext_Free(_PyTier2TypeContext *type_context);
 #ifdef Py_STATS
 

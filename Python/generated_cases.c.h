@@ -2599,10 +2599,30 @@
 
         TARGET(JUMP_BACKWARD_QUICK) {
             PREDICTED(JUMP_BACKWARD_QUICK);
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             assert((oparg - INLINE_CACHE_ENTRIES_JUMP_BACKWARD) < INSTR_OFFSET());
             JUMPBY(-oparg);
-            next_instr += 10;
+            JUMPBY(INLINE_CACHE_ENTRIES_JUMP_BACKWARD);
             CHECK_EVAL_BREAKER();
+            _PyJITFunction trace = (_PyJITFunction)read_obj(cache->consequent_trace);
+            if (trace != NULL) {
+                // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                _PyJITReturnCode status = ((_PyJITFunction)(trace))(tstate, frame, stack_pointer, next_instr);
+                frame = cframe.current_frame;
+                next_instr = frame->prev_instr;
+                stack_pointer = _PyFrame_GetStackPointer(frame);
+                switch (status) {
+                case _JUSTIN_RETURN_DEOPT:
+                    NEXTOPARG();
+                    opcode = _PyOpcode_Deopt[opcode];
+                    DISPATCH_GOTO();
+                case _JUSTIN_RETURN_OK:
+                    DISPATCH();
+                case _JUSTIN_RETURN_GOTO_ERROR:
+                    goto error;
+                }
+                Py_UNREACHABLE();
+            }
             DISPATCH();
         }
 
@@ -4531,17 +4551,36 @@
             _Py_CODEUNIT *t2_nextinstr = NULL;
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             _Py_CODEUNIT *tier1_fallback = NULL;
-
-            t2_nextinstr = _PyTier2_LocateJumpBackwardsBB(
+            _PyTier2BBMetadata *meta = _PyTier2_LocateJumpBackwardsBB(
                 frame, cache->bb_id_tagged, -oparg, &tier1_fallback, curr,
                 STACK_LEVEL());
-            if (t2_nextinstr == NULL) {
+            if (meta == NULL) {
                 // Fall back to tier 1.
                 next_instr = tier1_fallback;
             }
-            next_instr = t2_nextinstr;
+            else {
+                next_instr = meta->tier2_start;
+            }
 
             // Rewrite self
-            _PyTier2_RewriteBackwardJump(curr, next_instr);
+            _PyTier2_RewriteBackwardJump(curr, next_instr, meta);
+            if (meta != NULL && meta->machine_code != NULL) {
+                // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                _PyJITReturnCode status = ((_PyJITFunction)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
+                frame = cframe.current_frame;
+                next_instr = frame->prev_instr;
+                stack_pointer = _PyFrame_GetStackPointer(frame);
+                switch (status) {
+                case _JUSTIN_RETURN_DEOPT:
+                    NEXTOPARG();
+                    opcode = _PyOpcode_Deopt[opcode];
+                    DISPATCH_GOTO();
+                case _JUSTIN_RETURN_OK:
+                    DISPATCH();
+                case _JUSTIN_RETURN_GOTO_ERROR:
+                    goto error;
+                }
+                Py_UNREACHABLE();
+            }
             DISPATCH();
         }

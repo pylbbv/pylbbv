@@ -107,8 +107,8 @@ jit_compile(
         written++;
         i += caches;
     }
-    // Nothing to compile...
-    if (written == 0) {
+    // Nothing to compile, or too short to make it worth it!
+    if (written <= 2) {
         PyMem_Free(trace);
         return 0;
     }
@@ -1239,6 +1239,7 @@ IS_FORBIDDEN_OPCODE(int opcode, int nextop)
     case GET_ANEXT:
     case BEFORE_ASYNC_WITH:
     case END_ASYNC_FOR:
+    case GET_YIELD_FROM_ITER:
         // Raise keyword
     case RAISE_VARARGS:
         // Exceptions, we could support these theoretically.
@@ -1638,7 +1639,7 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, int target_bb_id,
     _Py_CODEUNIT *tier1_start)
 {
 #if BB_DEBUG
-    fprintf(stderr, "Attempting to add jump id %d as jump target\n", meta->id);
+    fprintf(stderr, "Attempting to add jump id %d as jump target\n", target_bb_id);
 #endif
     // Locate where to insert the BB ID
     int backward_jump_offset_index = 0;
@@ -1658,7 +1659,7 @@ add_metadata_to_jump_2d_array(_PyTier2Info *t2_info, int target_bb_id,
         if (t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].id ==
             -1) {
 #if BB_DEBUG
-            fprintf(stderr, "Added jump id %d as jump target\n", meta->id);
+            fprintf(stderr, "Added jump id %d as jump target\n", target_bb_id);
 #endif
             t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].id = target_bb_id;
             t2_info->backward_jump_target_bb_pairs[backward_jump_offset_index][jump_i].start_type_context = starting_context;
@@ -2383,8 +2384,8 @@ end:
     // Tell BB space the number of bytes we wrote.
     bb_space->water_level += (write_i - t2_start) * sizeof(_Py_CODEUNIT);
 #if BB_DEBUG
-    fprintf(stderr, "Generated BB T2 Start: %p, T1 offset: %zu\n", meta->tier2_start,
-        meta->tier1_end - _PyCode_CODE(co));
+    fprintf(stderr, "Generated BB T2 Start: %p, T1 offset: %zu\n", metas[0]->tier2_start,
+        metas[0]->tier1_end - _PyCode_CODE(co));
 #endif
     assert(metas_size >= 0);
     // JIT compile the bb
@@ -3137,9 +3138,9 @@ diff_typecontext(_PyTier2TypeContext *ctx1, _PyTier2TypeContext *ctx2)
  * @param tier1_fallback Signals the tier 1 instruction to fall back to should generation fail.
  * @param curr Current executing instruction
  * @param stacklevel The stack level of the operand stack.
- * @return The next tier 2 instruction to execute.
+ * @return The target BB's metadata.
 */
-_Py_CODEUNIT *
+_PyTier2BBMetadata *
 _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged, int jumpby,
     _Py_CODEUNIT **tier1_fallback,
     _Py_CODEUNIT *curr, int stacklevel)
@@ -3265,7 +3266,7 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
             }
         }
         assert(found);
-        return meta->tier2_start;
+        return meta;
     }
     assert(matching_bb_id >= 0);
     assert(matching_bb_id <= t2_info->bb_data_curr);
@@ -3273,7 +3274,7 @@ _PyTier2_LocateJumpBackwardsBB(_PyInterpreterFrame *frame, uint16_t bb_id_tagged
     fprintf(stderr, "Using jump target BB ID: %d\n", matching_bb_id);
 #endif
     _PyTier2BBMetadata *target_metadata = t2_info->bb_data[matching_bb_id];
-    return target_metadata->tier2_start;
+    return target_metadata;
 }
 
 
@@ -3325,7 +3326,7 @@ _PyTier2_RewriteForwardJump(_Py_CODEUNIT *bb_branch, _Py_CODEUNIT *target)
 
 
 /**
- * @brief Rewrites a BB_dD_LAZY to a more efficient standard BACKWARD_JUMP.
+ * @brief Rewrites a BB_JUMP_BACKWARD_LAZY to a more efficient standard BACKWARD_JUMP.
  *
  * Before:
  * 
@@ -3343,9 +3344,10 @@ _PyTier2_RewriteForwardJump(_Py_CODEUNIT *bb_branch, _Py_CODEUNIT *target)
  * 
  * @param jump_backward_lazy The backwards jump instruction.
  * @param target The target we're jumping to.
+ * @param meta The target's BB metadata.
 */
 void
-_PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *target)
+_PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *target, _PyTier2BBMetadata *meta)
 {
     _Py_CODEUNIT *write_curr = jump_backward_lazy - 1;
     _Py_CODEUNIT *prev = jump_backward_lazy - 1;
@@ -3379,6 +3381,11 @@ _PyTier2_RewriteBackwardJump(_Py_CODEUNIT *jump_backward_lazy, _Py_CODEUNIT *tar
         ? JUMP_BACKWARD_QUICK
         : JUMP_FORWARD);
     write_curr->op.arg = oparg & 0xFF;
+    write_curr++;
+    _PyBBBranchCache *cache = (_PyBBBranchCache *)write_curr;
+    if (meta != NULL && is_backwards_jump) {
+        write_obj(cache->consequent_trace, (PyObject *)meta->machine_code);
+    }
     return;
 }
 
