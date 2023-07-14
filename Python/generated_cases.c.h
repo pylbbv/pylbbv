@@ -4278,6 +4278,8 @@
             _Py_CODEUNIT *tier1_fallback = NULL;
             if (BB_TEST_IS_SUCCESSOR(frame)) {
                 // Generate consequent.
+                // Rewrite self
+                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
                 meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     0, &tier1_fallback, frame->bb_test);
@@ -4286,12 +4288,12 @@
                     next_instr = tier1_fallback;
                     DISPATCH();
                 }
-                // Rewrite self
-                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_UNSET);
                 memcpy(cache->consequent_trace, &meta->machine_code, sizeof(uint64_t));
             }
             else {
                 // Generate alternative.
+                // Rewrite self
+                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
                 meta = _PyTier2_GenerateNextBB(
                     frame, cache->bb_id_tagged, next_instr - 1,
                     oparg, &tier1_fallback, frame->bb_test);
@@ -4300,8 +4302,6 @@
                     next_instr = tier1_fallback;
                     DISPATCH();
                 }
-                // Rewrite self
-                _py_set_opcode(next_instr - 1, BB_BRANCH_IF_FLAG_SET);
                 memcpy(cache->alternative_trace, &meta->machine_code, sizeof(uint64_t));
             }
             Py_ssize_t forward_jump = meta->tier2_start - next_instr;
@@ -4313,7 +4313,7 @@
                 DISPATCH();
             }
             // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
-            _PyJITReturnCode status = ((_PyJITFunction)(uintptr_t)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
+            _PyJITReturnCode status = ((_PyJITFunction)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
             frame = cframe.current_frame;
             next_instr = frame->prev_instr;
             stack_pointer = _PyFrame_GetStackPointer(frame);
@@ -4327,9 +4327,7 @@
             case _JUSTIN_RETURN_GOTO_ERROR:
                 goto error;
             }
-            //Py_UNREACHABLE();
-            next_instr += 10;
-            DISPATCH();
+            Py_UNREACHABLE();
         }
 
         TARGET(BB_BRANCH_IF_FLAG_UNSET) {
@@ -4349,23 +4347,84 @@
                 else {
                     next_instr = meta->tier2_start;
                 }
-
                 // Rewrite self
                 _PyTier2_RewriteForwardJump(curr, next_instr);
+                memcpy(cache->alternative_trace, &meta->machine_code, sizeof(uint64_t));
+                if (meta->machine_code != NULL) {
+                    // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                    _PyJITReturnCode status = ((_PyJITFunction)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
+                    frame = cframe.current_frame;
+                    next_instr = frame->prev_instr;
+                    stack_pointer = _PyFrame_GetStackPointer(frame);
+                    switch (status) {
+                    case _JUSTIN_RETURN_DEOPT:
+                        NEXTOPARG();
+                        opcode = _PyOpcode_Deopt[opcode];
+                        DISPATCH_GOTO();
+                    case _JUSTIN_RETURN_OK:
+                        DISPATCH();
+                    case _JUSTIN_RETURN_GOTO_ERROR:
+                        goto error;
+                    }
+                    Py_UNREACHABLE();
+                }
                 DISPATCH();
             }
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             JUMPBY(cache->successor_jumpby);
+            _PyJITFunction trace = (_PyJITFunction)read_obj(cache->consequent_trace);
+            if (trace != NULL) {
+                // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                _PyJITReturnCode status = ((_PyJITFunction)(trace))(tstate, frame, stack_pointer, next_instr);
+                frame = cframe.current_frame;
+                next_instr = frame->prev_instr;
+                stack_pointer = _PyFrame_GetStackPointer(frame);
+                switch (status) {
+                case _JUSTIN_RETURN_DEOPT:
+                    NEXTOPARG();
+                    opcode = _PyOpcode_Deopt[opcode];
+                    DISPATCH_GOTO();
+                case _JUSTIN_RETURN_OK:
+                    DISPATCH();
+                case _JUSTIN_RETURN_GOTO_ERROR:
+                    goto error;
+                }
+                Py_UNREACHABLE();
+            }
+
             DISPATCH();
         }
 
         TARGET(BB_JUMP_IF_FLAG_UNSET) {
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            _PyJITFunction trace = NULL;
             if (!BB_TEST_IS_SUCCESSOR(frame)) {
                 JUMPBY(oparg);
-                DISPATCH();
+                trace = (_PyJITFunction)read_obj(cache->alternative_trace);
             }
-            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
-            JUMPBY(cache->successor_jumpby);
+            else {
+                JUMPBY(cache->successor_jumpby);
+                trace = (_PyJITFunction)read_obj(cache->consequent_trace);
+            }
+
+            if (trace != NULL) {
+                // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                _PyJITReturnCode status = ((_PyJITFunction)(trace))(tstate, frame, stack_pointer, next_instr);
+                frame = cframe.current_frame;
+                next_instr = frame->prev_instr;
+                stack_pointer = _PyFrame_GetStackPointer(frame);
+                switch (status) {
+                case _JUSTIN_RETURN_DEOPT:
+                    NEXTOPARG();
+                    opcode = _PyOpcode_Deopt[opcode];
+                    DISPATCH_GOTO();
+                case _JUSTIN_RETURN_OK:
+                    DISPATCH();
+                case _JUSTIN_RETURN_GOTO_ERROR:
+                    goto error;
+                }
+                Py_UNREACHABLE();
+            }
             DISPATCH();
         }
 
@@ -4390,20 +4449,80 @@
 
                 // Rewrite self
                 _PyTier2_RewriteForwardJump(curr, next_instr);
+                memcpy(cache->consequent_trace, &meta->machine_code, sizeof(uint64_t));
+                if (meta->machine_code != NULL) {
+                    // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                    _PyJITReturnCode status = ((_PyJITFunction)(meta->machine_code))(tstate, frame, stack_pointer, next_instr);
+                    frame = cframe.current_frame;
+                    next_instr = frame->prev_instr;
+                    stack_pointer = _PyFrame_GetStackPointer(frame);
+                    switch (status) {
+                    case _JUSTIN_RETURN_DEOPT:
+                        NEXTOPARG();
+                        opcode = _PyOpcode_Deopt[opcode];
+                        DISPATCH_GOTO();
+                    case _JUSTIN_RETURN_OK:
+                        DISPATCH();
+                    case _JUSTIN_RETURN_GOTO_ERROR:
+                        goto error;
+                    }
+                    Py_UNREACHABLE();
+                }
                 DISPATCH();
             }
             _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
             JUMPBY(cache->successor_jumpby);
+            _PyJITFunction trace = (_PyJITFunction)read_obj(cache->alternative_trace);
+            if (trace != NULL) {
+                // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                _PyJITReturnCode status = ((_PyJITFunction)(trace))(tstate, frame, stack_pointer, next_instr);
+                frame = cframe.current_frame;
+                next_instr = frame->prev_instr;
+                stack_pointer = _PyFrame_GetStackPointer(frame);
+                switch (status) {
+                case _JUSTIN_RETURN_DEOPT:
+                    NEXTOPARG();
+                    opcode = _PyOpcode_Deopt[opcode];
+                    DISPATCH_GOTO();
+                case _JUSTIN_RETURN_OK:
+                    DISPATCH();
+                case _JUSTIN_RETURN_GOTO_ERROR:
+                    goto error;
+                }
+                Py_UNREACHABLE();
+            }
             DISPATCH();
         }
 
         TARGET(BB_JUMP_IF_FLAG_SET) {
+            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
+            _PyJITFunction trace = NULL;
             if (BB_TEST_IS_SUCCESSOR(frame)) {
                 JUMPBY(oparg);
-                DISPATCH();
+                trace = (_PyJITFunction)read_obj(cache->consequent_trace);
             }
-            _PyBBBranchCache *cache = (_PyBBBranchCache *)next_instr;
-            JUMPBY(cache->successor_jumpby);
+            else {
+                JUMPBY(cache->successor_jumpby);
+                trace = (_PyJITFunction)read_obj(cache->alternative_trace);
+            }
+            if (trace != NULL) {
+                // The following code is partially adapted from Brandt Bucher's https://github.com/brandtbucher/cpython/blob/justin/Python/bytecodes.c#L2175
+                _PyJITReturnCode status = ((_PyJITFunction)(trace))(tstate, frame, stack_pointer, next_instr);
+                frame = cframe.current_frame;
+                next_instr = frame->prev_instr;
+                stack_pointer = _PyFrame_GetStackPointer(frame);
+                switch (status) {
+                case _JUSTIN_RETURN_DEOPT:
+                    NEXTOPARG();
+                    opcode = _PyOpcode_Deopt[opcode];
+                    DISPATCH_GOTO();
+                case _JUSTIN_RETURN_OK:
+                    DISPATCH();
+                case _JUSTIN_RETURN_GOTO_ERROR:
+                    goto error;
+                }
+                Py_UNREACHABLE();
+            }
             DISPATCH();
         }
 
