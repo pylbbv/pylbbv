@@ -36,7 +36,7 @@ Type propagation means we can take the type information gathered from a single b
 
 Type check removal means removing type checks in dynamic Python. E.g. if you have ``a + b``, the fast path in Python has to check that these are `int` or `str` or `float`, then if all those fail, rely on a generic `+` function. These type checks incur overhead at runtime. With type information, if we know the types, that we don't need any type checks at all! This means we can eliminate type checks.
 
-We had a rudimentary test script and Doxygen documentation for all our functions to follow common SWE practices.
+We have a rudimentary test script and Doxygen documentation for all our functions to follow common SWE practices.
 
 #### Orbital
 
@@ -45,7 +45,7 @@ This Orbital, we intend to refine pyLBBV. These include but are not limited to:
 - [X] Bug fixing
 - [X] A more advanced type propagator.
 - [X] A more comprehensive test suite with Continuous Integration testing.
-- [ ] A copy and patch JIT compiler. (Not yet implemented!)
+- [X] A copy and patch JIT compiler.
 
 A JIT(Just-in-Time) compiler is just a program that generates native machine executable code at runtime. [Copy and Patch](https://arxiv.org/abs/2011.13127) is a new fast compilation technique developed rather recently. The general idea is that compilation normally requires multiple steps, thus making compilation slow (recall how many steps your SICP meta-circular evaluator needs to execute JS)! Copy and patch makes compilation faster by skipping all the intermediate steps, and just creating "templates" for
 the final code. These "templates" are called *stencils* and they contain *holes*, i.e. missing values. All you have to do for compilation now is to copy and template, and patch in the holes. Thus making it very fast!
@@ -81,8 +81,41 @@ We did a major refactor of our code generation machinery. This makes the code ea
 ![image](./orbital/CI.png)
 - All PRs require review and an approval before merging is allowed. All tests in CI must also pass. This follows standard best practices.
 
+##### Copy and Patch JIT Compiler
+
+The copy-and-patch JIT compiler uses a stencil compiler provided by Brandt Bucher.
+
+- At runtime, each basic block, except the branches (exits) are compiled to machine code.
+- If compilation is successful, execution jumps into the machine code rather than the interpreter bytecode.
+- The branches remain as CPython interpreter bytecode, to faciliatate easy branching.
+- Upon encountering a branch, the interpreter leaves the machine code to go back into bytecode.
+- Execution thus interleaves between machine code and the interpreter.
+
 ## Architecture Diagram and Design
 
+### Compile-time
+
+```mermaid
+flowchart TD
+    dsl[bytecodes.c<br> Modified DSL <br> containing CPython <br> bytecode definitions]
+    typeprop[tier2_typepropagator.c.h <br> Type propagator]
+    instdef[generated_cases.c.h <br> CPython bytecode <br> interpreter <br> includes Tier 2 <br> bytecode]
+    stencils[jit_stencil.h <br> JIT versions of <br> CPython bytecode]
+    tier2[Tier2 Execution]
+    instdef -- Used in --> tier2
+    stencils -- Used in --> tier2
+    typeprop -- Used in --> tier2
+    tier2 -- Component of --> python.exe
+    subgraph Our Project
+        dsl -- Generates --> instdef
+        dsl -- Generates --> typeprop
+    end
+    subgraph Brandt Bucher's Stencil Compiler
+        instdef -- Compiles into --> stencils
+    end
+```
+
+### Runtime
 ```mermaid
 sequenceDiagram
     autonumber
@@ -100,25 +133,29 @@ sequenceDiagram
     end
     Tier 1 ->> Tier 2: Code executed more <br> than 63 times and <br> Tier 1 instructions <br> present, triggers the <br> Tier 2 interpreter
     loop Until exit scope executed
-        loop until Tier 2 encounters type-specialised tier 1 instruction
+        loop until Tier 2 encounters type-specialised tier 1 instruction or a branch instruction
             Note over Tier 2: Tier 2 copies Tier 1 <br> instructions into a <br> buffer to be executed <br> according to runtime <br> type info
             Tier 2 ->> Type Propagator: Requests type propagator 
             Type Propagator ->> Tier 2: Type propagator <br> updates runtime type <br> info based on <br>newly emitted code
         end
-        Note over Tier 2: Emits a typeguard <br> and executes Tier 2 code <br> until typeguard is hit.
+        Note over Tier 2: Emits a typeguard <br> or branch
+        Note over Tier 2: JIT compiles current <br> basic block into <br> machine code
+        Note over Tier 2: Execute machine code <br> until the end of the <br> basic block
+        Note over Tier 2: Execute the Tier 2 <br> branch instruction <br> or type guard
         Tier 2 ->> Type Propagator: Requests type propagator
         Type Propagator ->> Tier 2: Type propagator updates <br> runtime type info <br> based on  branch taken
-        Note over Tier 2: Emits type specialised <br> branch according to <br> runtime type info
+        Note over Tier 2: Starts emitting <br> type specialised <br> branch according to <br> runtime type info
     end
 ```
 
 ## What's left for our project
 
-- The Copy and Patch JIT compiler.
+- Just general bugfixing.
+- Evaluation and benchmarking
 
 ## Evaluation and benchmarks
 
-We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results. For now we expect performance to have no improvement as we have yet to implement the copy and patch JIT compiler.
+We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results.
 
 ## Changelog over CS4215
 
@@ -148,6 +185,8 @@ We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py
 
 ## Build instructions
 
+You should install LLVM 16.0 for your system.
+
 You should follow the official CPython build instructions for your platform.
 https://devguide.python.org/getting-started/setup-building/
 
@@ -168,13 +207,16 @@ After building, run `python tier2_test.py` or `python.bat tier2_test.py` (on Win
 
 ## Debugging output
 
-In `tier2.c`, two flags can be set to print debug messages:
+In `tier2.c`, three flags can be set to print debug messages:
 ```c
-// Prints codegen debug messages
+// Prints Tier 2 intepreter codegen debug messages
 #define BB_DEBUG 0
 
 // Prints typeprop debug messages
 #define TYPEPROP_DEBUG 0
+
+// Prints JIT codegen debug messages
+#define JIT_DEBUG 0
 ```
 
 ## Addendum
