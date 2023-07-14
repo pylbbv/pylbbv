@@ -151,10 +151,11 @@ sequenceDiagram
 ## What's left for our project
 
 - Just general bugfixing.
+- Evaluation and benchmarking
 
 ## Evaluation and benchmarks
 
-We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results. For now we expect performance to have no improvement as we have yet to implement the copy and patch JIT compiler.
+We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results. We expect at least some performance improvements now that we have implemented the copy and patch JIT compiler.
 
 ## Changelog over CS4215
 
