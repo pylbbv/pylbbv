@@ -1,6 +1,7 @@
 # pyLBBVAndPatch 
 
-A WIP Lazy Basic Block Versioning + (eventually) Copy and Patch JIT Interpreter for CPython.
+A WIP Lazy Basic Block Versioning + Copy and Patch JIT Interpreter for CPython.
+**NOTE**: **This is not any faster than CPython.** It's just a test bed for cool experimental technologies that we want to have fun with.
 
 ## Trying this project out
 
