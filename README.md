@@ -156,7 +156,11 @@ sequenceDiagram
 
 ## Evaluation and benchmarks
 
-We will run the [bm_nbody.py](./bm_nbody.py) script and the [bm_float_unboxed.py](./bm_float_unboxed.py) to gather results.
+Results can be found [here](./tier2_results/orbital/).
+
+At the time of writing this (Milestone 3 release), pyLBBVAndPatch is only around 12% faster than CPython at [bm_float_unboxed.py](./bm_float_unboxed.py), which presents a significant regression from 39% faster in the original pyLBBV.
+
+We will run the [bm_nbody.py](./bm_nbody.py) script if we can fix the remaining bugs.
 
 ## Changelog over CS4215
 
